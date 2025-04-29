@@ -71,7 +71,7 @@ export default function LoginPage(): React.ReactElement {
           className="ml-4"
         />
       </div>
-      <form onSubmit={handleLogin} className="bg-white rounded-lg shadow-lg p-8 w-full max-w-sm mx-auto mt-25">
+      <form onSubmit={handleLogin} className="bg-white rounded-lg shadow-lg p-8 w-full max-w-sm mx-auto mt-18">
         <h2 className="text-2xl font-bold text-[#003087] mb-6 font-['Poppins'] text-center">
           Digitization Project Report (Sign In)
         </h2>
