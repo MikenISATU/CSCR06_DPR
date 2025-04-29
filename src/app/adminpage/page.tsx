@@ -570,7 +570,7 @@ export default function AdminPage() {
 
         <div className="mb-8">
           <h2 className="text-lg sm:text-xl font-semibold text-[#003087] mb-4 font-['Poppins']">
-            Manage Record Categories
+            Manage Type of Record Categories
           </h2>
           <div className="flex flex-col sm:flex-row items-center space-y-4 sm:space-y-0 sm:space-x-4 mb-4">
             <select
