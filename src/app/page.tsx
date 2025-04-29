@@ -77,7 +77,7 @@ export default function LoginPage(): React.ReactElement {
         </h2>
         <div className="space-y-4">
           <div>
-            <label className="block mb-1 text-sm font-medium text-black">
+            <label className="block mb-1 text-sm font-medium text-[#003087]">
               Username
             </label>
             <input
@@ -90,13 +90,13 @@ export default function LoginPage(): React.ReactElement {
             />
           </div>
           <div>
-            <label className="block mb-1 text-sm font-medium text-black">
+            <label className="block mb-1 text-sm font-medium text-[#003087]">
               Password
             </label>
             <input
               type="password"
               required
-              className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-black transition-colors"
+              className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[#003087] transition-colors"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Enter your password"
