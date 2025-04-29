@@ -60,19 +60,19 @@ export default function LoginPage(): React.ReactElement {
   }
 
   return (
-    <div className="min-h-screen bg-[#F5F6F5] flex flex-col items-start p-4">
+    <div className="min-h-screen bg-[#F5F6F5] flex flex-col items-center p-4 sm:p-6">
       <div className="mb-6">
         <Image
           src="/logo.png"
           alt="Website Logo"
-          width={150}
-          height={50}
+          width={120}
+          height={40}
           priority
-          className="ml-4"
+          className="w-32 sm:w-40"
         />
       </div>
-      <form onSubmit={handleLogin} className="bg-white rounded-lg shadow-lg p-8 w-full max-w-sm mx-auto mt-18">
-        <h2 className="text-2xl font-bold text-[#003087] mb-6 font-['Poppins'] text-center">
+      <form onSubmit={handleLogin} className="bg-white rounded-lg shadow-lg p-6 sm:p-8 w-full max-w-sm mt-8 sm:mt-16">
+        <h2 className="text-xl sm:text-2xl font-bold text-[#003087] mb-6 font-['Poppins'] text-center">
           Digitization Project Report (Sign In)
         </h2>
         <div className="space-y-4">
@@ -83,7 +83,7 @@ export default function LoginPage(): React.ReactElement {
             <input
               type="text"
               required
-              className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[#003087] transition-colors text-[#003087] placeholder-gray-500"
+              className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[#003087] transition-colors text-sm sm:text-base"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               placeholder="Enter your username"
@@ -96,7 +96,7 @@ export default function LoginPage(): React.ReactElement {
             <input
               type="password"
               required
-              className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[#003087] transition-colors text-[#003087] placeholder-gray-500"
+              className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[#003087] transition-colors text-sm sm:text-base"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Enter your password"
@@ -105,7 +105,7 @@ export default function LoginPage(): React.ReactElement {
         </div>
         <button
           type="submit"
-          className="w-full py-2 mt-6 bg-[#003087] text-white rounded hover:bg-[#002060] transition-colors font-medium"
+          className="w-full py-2 mt-6 bg-[#003087] text-white rounded hover:bg-[#002060] transition-colors font-medium text-sm sm:text-base"
         >
           Login
         </button>
