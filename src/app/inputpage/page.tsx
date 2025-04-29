@@ -2,7 +2,7 @@
 
 import { useState, useEffect, FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
-import Image from 'next/image' // Added import for Image component
+import Image from 'next/image'
 import { supabase } from './supbase'
 
 type User = { id: string; username: string; role: string }
@@ -76,6 +76,12 @@ export default function InputPage() {
     router.replace('/')
   }
 
+  // Function to truncate long type_of_record names
+  function truncateRecordName(name: string, maxLength: number = 20): string {
+    if (name.length <= maxLength) return name
+    return `${name.substring(0, maxLength - 3)}...`
+  }
+
   return (
     <div className="min-h-screen bg-[#F5F6F5] flex items-center justify-center p-4">
       <div className="w-full max-w-3xl bg-white rounded-lg shadow-lg p-6">
@@ -119,7 +125,7 @@ export default function InputPage() {
               type="text"
               value={typeOfRecord}
               onChange={(e) => setTypeOfRecord(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[#003087] transition-colors text-[#003087] placeholder-gray-500"
+              className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[#003087] transition-colors text-black placeholder-gray-500"
               placeholder="Enter type of record"
               required
             />
@@ -132,7 +138,7 @@ export default function InputPage() {
               type="text"
               value={periodCovered}
               onChange={(e) => setPeriodCovered(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[#003087] transition-colors text-[#003087] placeholder-gray-500"
+              className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[#003087] transition-colors text-black placeholder-gray-500"
               placeholder="Enter period covered (e.g., Jan 2025)"
               required
             />
@@ -145,7 +151,7 @@ export default function InputPage() {
               type="number"
               value={noOfPages}
               onChange={(e) => setNoOfPages(Number(e.target.value))}
-              className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[#003087] transition-colors text-[#003087] placeholder-gray-500"
+              className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[#003087] transition-colors text-black placeholder-gray-500"
               min={0}
               required
             />
@@ -170,10 +176,10 @@ export default function InputPage() {
               >
                 <div>
                   <p className="text-[#003087] font-medium">
-                    {r?.type_of_record} - {r?.period_covered}
+                    {truncateRecordName(r?.type_of_record)} - {r?.period_covered}
                   </p>
                   <p className="text-sm text-gray-600">
-                    <span className="font-medium">{r?.no_of_pages}</span> pages
+                    {r?.no_of_pages} pages
                   </p>
                 </div>
                 <div className="space-x-3">
