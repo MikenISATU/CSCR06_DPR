@@ -96,7 +96,7 @@ export default function LoginPage(): React.ReactElement {
             <input
               type="password"
               required
-              className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[#003087] transition-colors text-sm text-[#003087]"
+              className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[#003087] transition-colors text-sm sm:text-[#003087]"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Enter your password"
