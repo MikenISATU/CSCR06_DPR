@@ -119,7 +119,7 @@ export default function InputPage() {
               type="text"
               value={typeOfRecord}
               onChange={(e) => setTypeOfRecord(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[#003087] transition-colors text-black placeholder-gray-500"
+              className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[#003087] transition-colors text-[#003087] placeholder-gray-500"
               placeholder="Enter type of record"
               required
             />
@@ -132,7 +132,7 @@ export default function InputPage() {
               type="text"
               value={periodCovered}
               onChange={(e) => setPeriodCovered(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[#003087] transition-colors text-black placeholder-gray-500"
+              className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[#003087] transition-colors text-[#003087] placeholder-gray-500"
               placeholder="Enter period covered (e.g., Jan 2025)"
               required
             />
@@ -145,7 +145,7 @@ export default function InputPage() {
               type="number"
               value={noOfPages}
               onChange={(e) => setNoOfPages(Number(e.target.value))}
-              className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[#003087] transition-colors text-black placeholder-gray-500"
+              className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[#003087] transition-colors text-[#003087] placeholder-gray-500"
               min={0}
               required
             />
