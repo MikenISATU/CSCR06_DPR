@@ -23,7 +23,8 @@ export default function AdminPage() {
   const [yearlyReports, setYearlyReports] = useState<Report[]>([])
   const [showYearlyModal, setShowYearlyModal] = useState(false)
   const [isReportGenerated, setIsReportGenerated] = useState(false)
-  const [selectedMonth, setSelectedMonth] = useState<string>('') // e.g., "2025-01" for January 2025
+  const [selectedMonth, setSelectedMonth] = useState<string>('') // e.g., "01" for January
+  const [selectedYear, setSelectedYear] = useState<string>('') // e.g., "2025"
 
   useEffect(() => {
     const stored = localStorage.getItem('scanflow360_user')
@@ -245,17 +246,24 @@ export default function AdminPage() {
   }
 
   function downloadMonthlyReport() {
-    if (!selectedMonth) {
-      alert('Please select a month to download the report.')
+    if (!selectedMonth || !selectedYear) {
+      alert('Please select both a month and a year to download the report.')
       return
     }
 
-    const [year, month] = selectedMonth.split('-')
-    const monthName = new Date(year + "-" + month + "-01").toLocaleString('default', { month: 'long' })
+    const year = selectedYear
+    const month = selectedMonth
+    const monthName = new Date(`${year}-${month}-01`).toLocaleString('default', { month: 'long' })
     const filteredReports = reports.filter(r => {
       const reportDate = new Date(r.created_at)
       return reportDate.getFullYear() === parseInt(year) && (reportDate.getMonth() + 1) === parseInt(month)
     })
+
+    // Check if there are no reports for the selected month and year
+    if (filteredReports.length === 0) {
+      alert(`No reports exist for ${monthName} ${year}.`)
+      return
+    }
 
     const worksheet: XLSX.WorkSheet = XLSX.utils.aoa_to_sheet([])
 
@@ -401,6 +409,25 @@ export default function AdminPage() {
     },
   }
 
+  // Generate years from 2020 to 2030 for the dropdown
+  const years = Array.from({ length: 11 }, (_, i) => (2020 + i).toString())
+
+  // Array of months for dropdown
+  const months = [
+    { value: '01', label: 'January' },
+    { value: '02', label: 'February' },
+    { value: '03', label: 'March' },
+    { value: '04', label: 'April' },
+    { value: '05', label: 'May' },
+    { value: '06', label: 'June' },
+    { value: '07', label: 'July' },
+    { value: '08', label: 'August' },
+    { value: '09', label: 'September' },
+    { value: '10', label: 'October' },
+    { value: '11', label: 'November' },
+    { value: '12', label: 'December' },
+  ]
+
   return (
     <div className="min-h-screen bg-[#F5F6F5] p-4">
       <div className="w-full max-w-5xl mx-auto bg-white rounded-lg shadow-lg p-6 mt-12">
@@ -516,12 +543,30 @@ export default function AdminPage() {
             </div>
             <div className="flex items-center space-x-4">
               <label className="text-[#003087] font-medium">Download Monthly Report:</label>
-              <input
-                type="month"
+              <select
                 value={selectedMonth}
                 onChange={(e) => setSelectedMonth(e.target.value)}
                 className="border border-gray-300 rounded p-2"
-              />
+              >
+                <option value="" disabled>Select Month</option>
+                {months.map((month) => (
+                  <option key={month.value} value={month.value}>
+                    {month.label}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(e.target.value)}
+                className="border border-gray-300 rounded p-2"
+              >
+                <option value="" disabled>Select Year</option>
+                {years.map((year) => (
+                  <option key={year} value={year}>
+                    {year}
+                  </option>
+                ))}
+              </select>
               <button
                 onClick={downloadMonthlyReport}
                 className="py-2 px-4 bg-[#003087] text-white rounded hover:bg-[#002060] transition-colors font-medium"
