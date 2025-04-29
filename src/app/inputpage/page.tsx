@@ -164,41 +164,43 @@ export default function InputPage() {
           </button>
         </form>
 
-        {/* Reports List */}
-        <div className="space-y-4">
-          {reports.length === 0 ? (
-            <p className="text-center text-gray-500">No reports submitted yet.</p>
-          ) : (
-            reports.map((r) => (
-              <div
-                key={r.id}
-                className="flex justify-between items-center p-4 bg-[#F5F6F5] rounded-lg shadow-sm hover:shadow-md transition-shadow"
-              >
-                <div>
-                  <p className="text-[#003087] font-medium">
-                    {truncateRecordName(r?.type_of_record)} - {r?.period_covered}
-                  </p>
-                  <p className="text-sm text-gray-600">
-                    {r?.no_of_pages} pages
-                  </p>
+        {/* Reports List with Scrollable Container */}
+        <div className="max-h-60 overflow-y-auto">
+          <div className="space-y-4">
+            {reports.length === 0 ? (
+              <p className="text-center text-gray-500">No reports submitted yet.</p>
+            ) : (
+              reports.map((r) => (
+                <div
+                  key={r.id}
+                  className="flex justify-between items-center p-4 bg-[#F5F6F5] rounded-lg shadow-sm hover:shadow-md transition-shadow"
+                >
+                  <div>
+                    <p className="text-[#003087] font-medium">
+                      {truncateRecordName(r?.type_of_record)} - {r?.period_covered}
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      {r?.no_of_pages} pages
+                    </p>
+                  </div>
+                  <div className="space-x-3">
+                    <button
+                      onClick={() => handleDelete(r.id)}
+                      className="text-[#C1272D] hover:text-[#a12025] font-medium transition-colors"
+                    >
+                      Delete
+                    </button>
+                    <button
+                      onClick={() => setViewReport(r)}
+                      className="text-[#003087] hover:text-[#002060] font-medium transition-colors"
+                    >
+                      View
+                    </button>
+                  </div>
                 </div>
-                <div className="space-x-3">
-                  <button
-                    onClick={() => handleDelete(r.id)}
-                    className="text-[#C1272D] hover:text-[#a12025] font-medium transition-colors"
-                  >
-                    Delete
-                  </button>
-                  <button
-                    onClick={() => setViewReport(r)}
-                    className="text-[#003087] hover:text-[#002060] font-medium transition-colors"
-                  >
-                    View
-                  </button>
-                </div>
-              </div>
-            ))
-          )}
+              ))
+            )}
+          </div>
         </div>
 
         {/* Modal for Viewing Report */}
