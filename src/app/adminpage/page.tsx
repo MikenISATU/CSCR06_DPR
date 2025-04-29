@@ -8,6 +8,8 @@ import { Bar } from 'react-chartjs-2'
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend } from 'chart.js'
 import * as XLSX from 'xlsx'
 
+export const dynamic = 'force-dynamic';
+
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
 
 type User = { id: string; username: string; role: string }
