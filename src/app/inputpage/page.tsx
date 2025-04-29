@@ -12,6 +12,7 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
 
 type User = { id: string; username: string; role: string }
 type Report = { id: string; type_of_record: string; period_covered: string; no_of_pages: number; created_at?: string }
+type Category = { id: number; role: string; category: string }
 
 export default function InputPage() {
   const router = useRouter()
@@ -22,18 +23,40 @@ export default function InputPage() {
   const [reports, setReports] = useState<Report[]>([])
   const [viewReport, setViewReport] = useState<Report | null>(null)
   const [showMonthlySummary, setShowMonthlySummary] = useState(false)
+  const [categories, setCategories] = useState<string[]>([]) // State for dynamic categories
 
-  // Load user from localStorage
+  // Load user from localStorage and fetch categories
   useEffect(() => {
     const stored = localStorage.getItem('scanflow360_user')
     if (!stored) return router.replace('/login')
-    setUser(JSON.parse(stored))
-  }, [])
+    const parsedUser = JSON.parse(stored)
+    setUser(parsedUser)
+
+    // Fetch categories for the user's role
+    if (parsedUser) {
+      fetchCategories(parsedUser.role)
+    }
+  }, [router])
 
   // Fetch user's reports
   useEffect(() => {
     if (user) fetchReports()
   }, [user])
+
+  async function fetchCategories(role: string) {
+    const { data, error } = await supabase
+      .from('record_categories')
+      .select('category')
+      .eq('role', role.toUpperCase())
+
+    if (error) {
+      alert('Error fetching categories: ' + error.message)
+      return
+    }
+
+    const categoryList = data?.map((item: { category: string }) => item.category) || []
+    setCategories(categoryList)
+  }
 
   async function fetchReports() {
     const { data, error } = await supabase
@@ -87,39 +110,6 @@ export default function InputPage() {
     if (name.length <= maxLength) return name
     return `${name.substring(0, maxLength - 3)}...`
   }
-
-  // Define record types based on role
-  const recordTypes: { [key: string]: string[] } = {
-    ESD: [
-      "Regional List of Passing-Failing Examinees (CSE-PPT, Special Exams)",
-      "Regional Register of Eligibles (CSE-PPT, Special Exams)",
-      "Picture Seat Plans (CSE-PPT, Special Exams, COMEX)",
-      "Application Forms of Passers (CSE-PPT, Special Exams)",
-      "Supplementary Register of Eligibles (CSE-PR)",
-      "Masterlist of Examinees (COMEX)",
-      "Register of Eligibles (COMEX)",
-      "Masterlist of Honor Graduates (Grant of Special Eligibility)",
-      "Approved Applications for Grant of Eligibility Under Special Laws and CSC Issuances",
-    ],
-    MSD: [
-      "Disbursement Vouchers including supporting documents",
-      "Liquidation Reports including supporting documents",
-      "DBM, COA and CO Periodic Reports and Special Reports",
-      "Tax Compliance",
-      "Successful Procurement Transaction Documents",
-    ],
-    LSD: [
-      "Legal Services Division",
-      "CSC RO VI Decisions (2025 and prior years)",
-      "36 CSC RO VI Resolutions (2025 and prior years)",
-      "45 folders of Reference Materials",
-      "CSC RO VI Opinions",
-      "Identified Case Records",
-    ],
-  }
-
-  // Get the record types based on the user's role
-  const availableRecordTypes = user ? recordTypes[user.role.toUpperCase()] || [] : []
 
   // Function to apply styles to Excel cells
   function applyStyles(worksheet: XLSX.WorkSheet, startRow: number, endRow: number, numCols: number, isHeader: boolean = false, centerText: boolean = false) {
@@ -361,9 +351,9 @@ export default function InputPage() {
               required
             >
               <option value="" disabled className="text-gray-500">Select Type of Record</option>
-              {availableRecordTypes.map((record, index) => (
-                <option key={index} value={record} className="text-[#003087]">
-                  {record}
+              {categories.map((category, index) => (
+                <option key={index} value={category} className="text-[#003087]">
+                  {category}
                 </option>
               ))}
             </select>
