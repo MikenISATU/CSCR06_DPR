@@ -14,6 +14,7 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
 
 type User = { id: string; username: string; role: string }
 type Report = { id: string; useriud: string; type_of_record: string; period_covered: string; no_of_pages: number; role: string; created_at: string }
+type Category = { id: number; role: string; category: string }
 
 export default function AdminPage() {
   const router = useRouter()
@@ -23,8 +24,12 @@ export default function AdminPage() {
   const [yearlyReports, setYearlyReports] = useState<Report[]>([])
   const [showYearlyModal, setShowYearlyModal] = useState(false)
   const [isReportGenerated, setIsReportGenerated] = useState(false)
-  const [selectedMonth, setSelectedMonth] = useState<string>('') // e.g., "01" for January
-  const [selectedYear, setSelectedYear] = useState<string>('') // e.g., "2025"
+  const [selectedMonth, setSelectedMonth] = useState<string>('')
+  const [selectedYear, setSelectedYear] = useState<string>('')
+  const [categories, setCategories] = useState<Category[]>([])
+  const [newCategory, setNewCategory] = useState<string>('')
+  const [selectedRole, setSelectedRole] = useState<string>('MSD')
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null)
 
   useEffect(() => {
     const stored = localStorage.getItem('scanflow360_user')
@@ -38,7 +43,10 @@ export default function AdminPage() {
   }, [router])
 
   useEffect(() => {
-    if (user && user.role === 'ADMIN') fetchReports()
+    if (user && user.role === 'ADMIN') {
+      fetchReports()
+      fetchCategories()
+    }
   }, [user])
 
   async function fetchReports() {
@@ -51,13 +59,8 @@ export default function AdminPage() {
       return
     }
 
-    console.log("Raw data from Supabase (monthly):", data)
-
     const formattedReports = data?.map((report: any) => {
       const role = report.users2?.role || 'Unknown'
-      if (role === 'Unknown') {
-        console.log(`No role found for useriud: ${report.useriud}`)
-      }
       return {
         id: report.id,
         useriud: report.useriud,
@@ -69,12 +72,77 @@ export default function AdminPage() {
       }
     }) || []
 
-    console.log("All reports:", formattedReports)
     setReports(formattedReports)
   }
 
+  async function fetchCategories() {
+    const { data, error } = await supabase
+      .from('record_categories')
+      .select('id, role, category')
+
+    if (error) {
+      alert('Error fetching categories: ' + error.message)
+      return
+    }
+
+    setCategories(data || [])
+  }
+
+  async function addCategory() {
+    if (!newCategory) {
+      alert('Please enter a category name.')
+      return
+    }
+
+    const { error } = await supabase
+      .from('record_categories')
+      .insert({ role: selectedRole, category: newCategory })
+
+    if (error) {
+      alert('Error adding category: ' + error.message)
+      return
+    }
+
+    setNewCategory('')
+    fetchCategories()
+  }
+
+  async function updateCategory(categoryId: number, updatedCategory: string) {
+    if (!updatedCategory) {
+      alert('Please enter a category name.')
+      return
+    }
+
+    const { error } = await supabase
+      .from('record_categories')
+      .update({ category: updatedCategory })
+      .eq('id', categoryId)
+
+    if (error) {
+      alert('Error updating category: ' + error.message)
+      return
+    }
+
+    setEditingCategory(null)
+    fetchCategories()
+  }
+
+  async function deleteCategory(categoryId: number) {
+    const { error } = await supabase
+      .from('record_categories')
+      .delete()
+      .eq('id', categoryId)
+
+    if (error) {
+      alert('Error deleting category: ' + error.message)
+      return
+    }
+
+    fetchCategories()
+  }
+
   async function fetchYearlyReports() {
-    const currentYear = new Date().getFullYear() // 2025 as of April 29, 2025
+    const currentYear = new Date().getFullYear()
     const { data, error } = await supabase
       .from('monthly_reports1')
       .select('id, useriud, type_of_record, period_covered, no_of_pages, created_at, users2(role)')
@@ -111,7 +179,6 @@ export default function AdminPage() {
       .lt('created_at', oneYearAgo.toISOString())
 
     if (error) {
-      console.error('Error deleting old reports:', error)
       alert('Failed to delete old reports: ' + error.message)
       return
     }
@@ -154,13 +221,11 @@ export default function AdminPage() {
     const currentYear = new Date().getFullYear()
     const worksheet: XLSX.WorkSheet = XLSX.utils.aoa_to_sheet([])
 
-    // Title and Header (spanning columns B and C)
     XLSX.utils.sheet_add_aoa(worksheet, [["Civil Service Commission Regional Office VI"]], { origin: "B1" })
     XLSX.utils.sheet_add_aoa(worksheet, [["DIGITIZATION OF RECORDS"]], { origin: "B2" })
     XLSX.utils.sheet_add_aoa(worksheet, [[`For the Year ${currentYear}`]], { origin: "B3" })
     XLSX.utils.sheet_add_aoa(worksheet, [["Target: 100% of Identified Records"]], { origin: "B4" })
 
-    // Merge cells for headers (B1:C1, B2:C2, etc.)
     worksheet['!merges'] = [
       { s: { r: 0, c: 1 }, e: { r: 0, c: 2 } },
       { s: { r: 1, c: 1 }, e: { r: 1, c: 2 } },
@@ -168,7 +233,6 @@ export default function AdminPage() {
       { s: { r: 3, c: 1 }, e: { r: 3, c: 2 } },
     ]
 
-    // Apply centered styling to headers
     applyStyles(worksheet, 0, 3, 4, true, true)
 
     let currentRow: number = 6
@@ -188,12 +252,10 @@ export default function AdminPage() {
       const noOfPages = report.no_of_pages !== null && report.no_of_pages !== undefined ? report.no_of_pages : 'N/A'
 
       if (periods.length > 1) {
-        // Main record row
         const mainRow = [reportIndex++, report.type_of_record, "", ""]
         XLSX.utils.sheet_add_aoa(worksheet, [mainRow], { origin: "A" + currentRow })
         currentRow++
 
-        // Sub-rows for each period
         periods.forEach((period, idx) => {
           const pages = idx === 0 ? noOfPages : ""
           const subRow = ["", "", period, pages]
@@ -201,7 +263,6 @@ export default function AdminPage() {
           currentRow++
         })
       } else {
-        // Single period record
         const singleRow = [reportIndex++, report.type_of_record, periods[0], noOfPages]
         XLSX.utils.sheet_add_aoa(worksheet, [singleRow], { origin: "A" + currentRow })
         currentRow++
@@ -219,7 +280,6 @@ export default function AdminPage() {
     applyStyles(worksheet, currentRow - 1, currentRow - 1, tableHeader.length, true)
     currentRow += 2
 
-    // Footer (Consolidated by, Noted by)
     XLSX.utils.sheet_add_aoa(worksheet, [["Consolidated by:"]], { origin: "A" + currentRow })
     currentRow++
     XLSX.utils.sheet_add_aoa(worksheet, [[""]], { origin: "A" + currentRow })
@@ -236,7 +296,6 @@ export default function AdminPage() {
     currentRow++
     XLSX.utils.sheet_add_aoa(worksheet, [["Acting Director III"]], { origin: "A" + currentRow })
 
-    // Set column widths
     worksheet['!cols'] = [
       { wch: 5 },
       { wch: 50 },
@@ -263,7 +322,6 @@ export default function AdminPage() {
       return reportDate.getFullYear() === parseInt(year) && (reportDate.getMonth() + 1) === parseInt(month)
     })
 
-    // Check if there are no reports for the selected month and year
     if (filteredReports.length === 0) {
       alert(`No reports exist for ${monthName} ${year}.`)
       return
@@ -271,13 +329,11 @@ export default function AdminPage() {
 
     const worksheet: XLSX.WorkSheet = XLSX.utils.aoa_to_sheet([])
 
-    // Title and Header (spanning columns B and C)
     XLSX.utils.sheet_add_aoa(worksheet, [["Civil Service Commission Regional Office VI"]], { origin: "B1" })
     XLSX.utils.sheet_add_aoa(worksheet, [["DIGITIZATION OF RECORDS"]], { origin: "B2" })
     XLSX.utils.sheet_add_aoa(worksheet, [["For the month of " + monthName + " " + year]], { origin: "B3" })
     XLSX.utils.sheet_add_aoa(worksheet, [["Target: 100% of Identified Records"]], { origin: "B4" })
 
-    // Merge cells for headers (B1:C1, B2:C2, etc.)
     worksheet['!merges'] = [
       { s: { r: 0, c: 1 }, e: { r: 0, c: 2 } },
       { s: { r: 1, c: 1 }, e: { r: 1, c: 2 } },
@@ -285,7 +341,6 @@ export default function AdminPage() {
       { s: { r: 3, c: 1 }, e: { r: 3, c: 2 } },
     ]
 
-    // Apply centered styling to headers
     applyStyles(worksheet, 0, 3, 4, true, true)
 
     let currentRow: number = 6
@@ -303,12 +358,10 @@ export default function AdminPage() {
       const noOfPages = report.no_of_pages !== null && report.no_of_pages !== undefined ? report.no_of_pages : 'N/A'
 
       if (periods.length > 1) {
-        // Main record row
         const mainRow = [reportIndex++, report.type_of_record, "", ""]
         XLSX.utils.sheet_add_aoa(worksheet, [mainRow], { origin: "A" + currentRow })
         currentRow++
 
-        // Sub-rows for each period
         periods.forEach((period, idx) => {
           const pages = idx === 0 ? noOfPages : ""
           const subRow = ["", "", period, pages]
@@ -316,7 +369,6 @@ export default function AdminPage() {
           currentRow++
         })
       } else {
-        // Single period record
         const singleRow = [reportIndex++, report.type_of_record, periods[0], noOfPages]
         XLSX.utils.sheet_add_aoa(worksheet, [singleRow], { origin: "A" + currentRow })
         currentRow++
@@ -334,7 +386,6 @@ export default function AdminPage() {
     applyStyles(worksheet, currentRow - 1, currentRow - 1, tableHeader.length, true)
     currentRow += 2
 
-    // Footer
     XLSX.utils.sheet_add_aoa(worksheet, [["Consolidated by:"]], { origin: "A" + currentRow })
     currentRow++
     XLSX.utils.sheet_add_aoa(worksheet, [[""]], { origin: "A" + currentRow })
@@ -351,7 +402,6 @@ export default function AdminPage() {
     currentRow++
     XLSX.utils.sheet_add_aoa(worksheet, [["Director III"]], { origin: "A" + currentRow })
 
-    // Set column widths
     worksheet['!cols'] = [
       { wch: 5 },
       { wch: 50 },
@@ -387,7 +437,7 @@ export default function AdminPage() {
 
   const chartOptions = {
     responsive: true,
-    maintainAspectRatio: false, // Allows chart to adjust better on smaller screens
+    maintainAspectRatio: false,
     plugins: {
       legend: {
         position: 'top' as const,
@@ -414,10 +464,8 @@ export default function AdminPage() {
     },
   }
 
-  // Generate years from 2020 to 2030 for the dropdown
   const years = Array.from({ length: 11 }, (_, i) => (2020 + i).toString())
 
-  // Array of months for dropdown
   const months = [
     { value: '01', label: 'January' },
     { value: '02', label: 'February' },
@@ -432,6 +480,8 @@ export default function AdminPage() {
     { value: '11', label: 'November' },
     { value: '12', label: 'December' },
   ]
+
+  const roles = ['MSD', 'ESD', 'LSD']
 
   return (
     <div className="min-h-screen bg-[#F5F6F5] p-4 sm:p-6">
@@ -517,6 +567,105 @@ export default function AdminPage() {
             </div>
           )
         })}
+
+        <div className="mb-8">
+          <h2 className="text-lg sm:text-xl font-semibold text-[#003087] mb-4 font-['Poppins']">
+            Manage Record Categories
+          </h2>
+          <div className="flex flex-col sm:flex-row items-center space-y-4 sm:space-y-0 sm:space-x-4 mb-4">
+            <select
+              value={selectedRole}
+              onChange={(e) => setSelectedRole(e.target.value)}
+              className="border border-gray-300 rounded p-2 w-full sm:w-auto text-sm sm:text-base text-[#003087]"
+            >
+              {roles.map((role) => (
+                <option key={role} value={role} className="text-[#003087]">
+                  {role}
+                </option>
+              ))}
+            </select>
+            <input
+              type="text"
+              value={newCategory}
+              onChange={(e) => setNewCategory(e.target.value)}
+              placeholder="Enter new category"
+              className="border border-gray-300 rounded p-2 w-full sm:w-auto text-sm sm:text-base text-[#003087]"
+            />
+            <button
+              onClick={addCategory}
+              className="py-2 px-4 bg-[#003087] text-white rounded hover:bg-[#002060] transition-colors font-medium w-full sm:w-auto text-sm sm:text-base"
+            >
+              Add Category
+            </button>
+          </div>
+          <div className="overflow-x-auto max-h-60">
+            <table className="w-full border-collapse table-auto sm:table-fixed text-xs sm:text-sm">
+              <thead>
+                <tr className="bg-[#003087] text-white sticky top-0">
+                  <th className="p-2 text-left sm:w-[50px]">No.</th>
+                  <th className="p-2 text-left sm:w-[100px]">Role</th>
+                  <th className="p-2 text-left sm:w-[200px]">Category</th>
+                  <th className="p-2 text-left sm:w-[100px]">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {categories.map((cat, index) => (
+                  <tr key={cat.id} className="border-b hover:bg-[#F5F6F5]">
+                    <td className="p-2 truncate text-[#003087]">{index + 1}</td>
+                    <td className="p-2 truncate text-[#003087]">{cat.role}</td>
+                    <td className="p-2 truncate text-[#003087]">
+                      {editingCategory?.id === cat.id ? (
+                        <input
+                          type="text"
+                          value={editingCategory.category}
+                          onChange={(e) =>
+                            setEditingCategory({ ...editingCategory, category: e.target.value })
+                          }
+                          className="border border-gray-300 rounded p-1 w-full text-[#003087]"
+                        />
+                      ) : (
+                        cat.category
+                      )}
+                    </td>
+                    <td className="p-2 flex space-x-2">
+                      {editingCategory?.id === cat.id ? (
+                        <>
+                          <button
+                            onClick={() => updateCategory(cat.id, editingCategory.category)}
+                            className="text-[#003087] hover:text-[#002060] font-medium"
+                          >
+                            Save
+                          </button>
+                          <button
+                            onClick={() => setEditingCategory(null)}
+                            className="text-[#C1272D] hover:text-[#a12025] font-medium"
+                          >
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => setEditingCategory(cat)}
+                            className="text-[#003087] hover:text-[#002060] font-medium"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => deleteCategory(cat.id)}
+                            className="text-[#C1272D] hover:text-[#a12025] font-medium"
+                          >
+                            Delete
+                          </button>
+                        </>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
 
         <div className="mb-8">
           <h2 className="text-lg sm:text-xl font-semibold text-[#003087] mb-4 font-['Poppins']">
