@@ -33,7 +33,7 @@ export default function AdminPage() {
     setUser(parsedUser)
     if (parsedUser.role !== 'ADMIN') {
       alert('Access denied: Admins only')
-      router.replace('/inputpage')
+      router.replace('/')
     }
   }, [router])
 
@@ -443,7 +443,7 @@ export default function AdminPage() {
             />
             <div>
               <h1 className="text-2xl font-bold text-[#003087] font-['Poppins']">
-                Admin Dashboard (Monthly Reports)
+                Admin Dashboard
               </h1>
               {user && (
                 <p className="text-sm text-gray-600">
