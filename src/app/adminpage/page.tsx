@@ -457,22 +457,22 @@ export default function AdminPage() {
                       </tr>
                     </thead>
                     <tbody>
-                        {roleReports.map((r, index) => (
-                          <tr key={r.id} className="border-b hover:bg-[#F5F6F5]">
-                            <td className={`p-2 truncate ${role === 'MSD' ? 'text-[#003087]' : ''}`} title={String(index + 1)}>{index + 1}</td>
-                            <td className={`p-2 truncate ${role === 'MSD' ? 'text-[#003087]' : ''}`} title={r.type_of_record}>{r.type_of_record}</td>
-                            <td className={`p-2 truncate ${role === 'MSD' ? 'text-[#003087]' : ''}`} title={r.period_covered}>{r.period_covered}</td>
-                            <td className={`p-2 truncate ${role === 'MSD' ? 'text-[#003087]' : ''}`} title={String(r.no_of_pages)}>{r.no_of_pages}</td>
-                            <td className="p-2">
-                              <button
-                                onClick={() => setViewReport(r)}
-                                className="text-[#003087] hover:text-[#002060] font-medium transition-colors"
-                              >
-                                View
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
+                      {roleReports.map((r, index) => (
+                        <tr key={r.id} className="border-b hover:bg-[#F5F6F5]">
+                          <td className="p-2 truncate text-[#003087]" title={String(index + 1)}>{index + 1}</td>
+                          <td className="p-2 truncate text-[#003087]" title={r.type_of_record}>{r.type_of_record}</td>
+                          <td className="p-2 truncate text-[#003087]" title={r.period_covered}>{r.period_covered}</td>
+                          <td className="p-2 truncate text-[#003087]" title={String(r.no_of_pages)}>{r.no_of_pages}</td>
+                          <td className="p-2">
+                            <button
+                              onClick={() => setViewReport(r)}
+                              className="text-[#003087] hover:text-[#002060] font-medium transition-colors"
+                            >
+                              View
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
                       <tr className="font-bold">
                         <td colSpan={3} className="p-2 text-right text-[#003087]">Total No. of Pages</td>
                         <td className="p-2 text-[#003087]">{totalPages}</td>
