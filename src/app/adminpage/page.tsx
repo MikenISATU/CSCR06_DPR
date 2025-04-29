@@ -74,9 +74,12 @@ export default function AdminPage() {
   }
 
   async function fetchYearlyReports() {
+    const currentYear = new Date().getFullYear() // 2025 as of April 29, 2025
     const { data, error } = await supabase
       .from('monthly_reports1')
       .select('id, useriud, type_of_record, period_covered, no_of_pages, created_at, users2(role)')
+      .gte('created_at', `${currentYear}-01-01T00:00:00Z`)
+      .lte('created_at', `${currentYear}-12-31T23:59:59Z`)
 
     if (error) {
       alert('Error fetching yearly reports: ' + error.message)
@@ -148,12 +151,13 @@ export default function AdminPage() {
   }
 
   function downloadYearlyReport() {
+    const currentYear = new Date().getFullYear()
     const worksheet: XLSX.WorkSheet = XLSX.utils.aoa_to_sheet([])
 
     // Title and Header (spanning columns B and C)
     XLSX.utils.sheet_add_aoa(worksheet, [["Civil Service Commission Regional Office VI"]], { origin: "B1" })
     XLSX.utils.sheet_add_aoa(worksheet, [["DIGITIZATION OF RECORDS"]], { origin: "B2" })
-    XLSX.utils.sheet_add_aoa(worksheet, [["For the All-Time Period"]], { origin: "B3" })
+    XLSX.utils.sheet_add_aoa(worksheet, [[`For the Year ${currentYear}`]], { origin: "B3" })
     XLSX.utils.sheet_add_aoa(worksheet, [["Target: 100% of Identified Records"]], { origin: "B4" })
 
     // Merge cells for headers (B1:C1, B2:C2, etc.)
@@ -230,7 +234,7 @@ export default function AdminPage() {
     currentRow++
     XLSX.utils.sheet_add_aoa(worksheet, [["ATTY. ERNA T. ELIZAN"]], { origin: "A" + currentRow })
     currentRow++
-    XLSX.utils.sheet_add_aoa(worksheet, [["Director III"]], { origin: "A" + currentRow })
+    XLSX.utils.sheet_add_aoa(worksheet, [["Acting Director III"]], { origin: "A" + currentRow })
 
     // Set column widths
     worksheet['!cols'] = [
@@ -241,8 +245,8 @@ export default function AdminPage() {
     ]
 
     const workbook = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(workbook, worksheet, "All Time Report")
-    XLSX.writeFile(workbook, "All_Time_Report.xlsx")
+    XLSX.utils.book_append_sheet(workbook, worksheet, `Year_${currentYear}_Report`)
+    XLSX.writeFile(workbook, `Year_${currentYear}_Report.xlsx`)
   }
 
   function downloadMonthlyReport() {
@@ -368,7 +372,7 @@ export default function AdminPage() {
     labels: ['ESD', 'LSD', 'MSD'],
     datasets: [
       {
-        label: 'Total Pages (All Time)',
+        label: `Total Pages (Year ${new Date().getFullYear()})`,
         data: [
           yearlyReports.filter(r => r.role.toUpperCase() === 'ESD').reduce((sum, r) => sum + r.no_of_pages, 0),
           yearlyReports.filter(r => r.role.toUpperCase() === 'LSD').reduce((sum, r) => sum + r.no_of_pages, 0),
@@ -383,13 +387,14 @@ export default function AdminPage() {
 
   const chartOptions = {
     responsive: true,
+    maintainAspectRatio: false, // Allows chart to adjust better on smaller screens
     plugins: {
       legend: {
         position: 'top' as const,
       },
       title: {
         display: true,
-        text: 'Total Pages per Department (All Time)',
+        text: `Total Pages per Department (Year ${new Date().getFullYear()})`,
       },
     },
     scales: {
@@ -429,24 +434,24 @@ export default function AdminPage() {
   ]
 
   return (
-    <div className="min-h-screen bg-[#F5F6F5] p-4">
-      <div className="w-full max-w-5xl mx-auto bg-white rounded-lg shadow-lg p-6 mt-12">
-        <header className="flex justify-between items-center mb-6">
-          <div className="flex items-center">
+    <div className="min-h-screen bg-[#F5F6F5] p-4 sm:p-6">
+      <div className="w-full max-w-5xl mx-auto bg-white rounded-lg shadow-lg p-4 sm:p-6 mt-8 sm:mt-12">
+        <header className="flex flex-col sm:flex-row justify-between items-center mb-6 space-y-4 sm:space-y-0">
+          <div className="flex flex-col sm:flex-row items-center space-y-4 sm:space-y-0 sm:space-x-4">
             <Image
               src="/logo.png"
               alt="Website Logo"
-              width={150}
-              height={50}
+              width={120}
+              height={40}
               priority
-              className="mr-4"
+              className="w-32 sm:w-40"
             />
-            <div>
-              <h1 className="text-2xl font-bold text-[#003087] font-['Poppins']">
+            <div className="text-center sm:text-left">
+              <h1 className="text-xl sm:text-2xl font-bold text-[#003087] font-['Poppins']">
                 Admin Dashboard
               </h1>
               {user && (
-                <p className="text-sm text-gray-600">
+                <p className="text-xs sm:text-sm text-gray-600">
                   Role: <span className="font-medium text-[#003087]">{user.role}</span>
                 </p>
               )}
@@ -454,7 +459,7 @@ export default function AdminPage() {
           </div>
           <button
             onClick={logout}
-            className="text-[#C1272D] hover:text-[#a12025] font-medium transition-colors"
+            className="text-[#C1272D] hover:text-[#a12025] font-medium transition-colors text-sm sm:text-base"
           >
             Logout
           </button>
@@ -466,21 +471,21 @@ export default function AdminPage() {
 
           return (
             <div key={role} className="mb-8">
-              <h2 className="text-xl font-semibold text-[#003087] mb-4 font-['Poppins']">
+              <h2 className="text-lg sm:text-xl font-semibold text-[#003087] mb-4 font-['Poppins']">
                 {role} Reports
               </h2>
               {roleReports.length === 0 ? (
-                <p className="text-gray-500">No reports submitted for {role}.</p>
+                <p className="text-gray-500 text-sm sm:text-base">No reports submitted for {role}.</p>
               ) : (
                 <div className="overflow-x-auto max-h-60">
-                  <table className="w-full border-collapse table-fixed">
+                  <table className="w-full border-collapse table-auto sm:table-fixed text-xs sm:text-sm">
                     <thead>
                       <tr className="bg-[#003087] text-white sticky top-0">
-                        <th className="p-2 text-left w-[50px]">No.</th>
-                        <th className="p-2 text-left w-[200px]">Type of Record</th>
-                        <th className="p-2 text-left w-[150px]">Period Covered</th>
-                        <th className="p-2 text-left w-[100px]">No. of Pages</th>
-                        <th className="p-2 text-left w-[100px]">Actions</th>
+                        <th className="p-2 text-left sm:w-[50px]">No.</th>
+                        <th className="p-2 text-left sm:w-[200px]">Type of Record</th>
+                        <th className="p-2 text-left sm:w-[150px]">Period Covered</th>
+                        <th className="p-2 text-left sm:w-[100px]">No. of Pages</th>
+                        <th className="p-2 text-left sm:w-[100px]">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -514,39 +519,39 @@ export default function AdminPage() {
         })}
 
         <div className="mb-8">
-          <h2 className="text-xl font-semibold text-[#003087] mb-4 font-['Poppins']">
+          <h2 className="text-lg sm:text-xl font-semibold text-[#003087] mb-4 font-['Poppins']">
             Yearly Summary
           </h2>
           <div className="flex flex-col space-y-4">
-            <div className="flex space-x-4">
+            <div className="flex flex-col sm:flex-row sm:space-x-4 space-y-4 sm:space-y-0">
               <button
                 onClick={fetchYearlyReports}
-                className="py-2 px-4 bg-[#003087] text-white rounded hover:bg-[#002060] transition-colors mb-4 font-medium"
+                className="py-2 px-4 bg-[#003087] text-white rounded hover:bg-[#002060] transition-colors font-medium text-sm sm:text-base"
               >
                 View Summary
               </button>
               <button
                 onClick={isReportGenerated ? downloadYearlyReport : fetchYearlyReports}
                 className={
-                  "py-2 px-4 font-medium text-white rounded transition-colors mb-4 " +
+                  "py-2 px-4 font-medium text-white rounded transition-colors text-sm sm:text-base " +
                   (isReportGenerated ? 'bg-[#C1272D] hover:bg-[#a12025]' : 'bg-[#003087] hover:bg-[#002060]')
                 }
               >
-                {isReportGenerated ? 'Download All-Time Report' : 'Generate Report'}
+                {isReportGenerated ? 'Download Yearly Report' : 'Generate Report'}
               </button>
               <button
                 onClick={deleteOldReports}
-                className="py-2 px-4 bg-[#C1272D] text-white rounded hover:bg-[#a12025] transition-colors font-medium mb-4"
+                className="py-2 px-4 bg-[#C1272D] text-white rounded hover:bg-[#a12025] transition-colors font-medium text-sm sm:text-base"
               >
                 Delete Records
               </button>
             </div>
-            <div className="flex items-center space-x-4">
-              <label className="text-[#003087] font-medium">Download Monthly Report:</label>
+            <div className="flex flex-col sm:flex-row items-center space-y-4 sm:space-y-0 sm:space-x-4">
+              <label className="text-[#003087] font-medium text-sm sm:text-base">Download Monthly Report:</label>
               <select
                 value={selectedMonth}
                 onChange={(e) => setSelectedMonth(e.target.value)}
-                className="border border-gray-300 rounded p-2"
+                className="border border-gray-300 rounded p-2 w-full sm:w-auto text-sm sm:text-base"
               >
                 <option value="" disabled>Select Month</option>
                 {months.map((month) => (
@@ -558,7 +563,7 @@ export default function AdminPage() {
               <select
                 value={selectedYear}
                 onChange={(e) => setSelectedYear(e.target.value)}
-                className="border border-gray-300 rounded p-2"
+                className="border border-gray-300 rounded p-2 w-full sm:w-auto text-sm sm:text-base"
               >
                 <option value="" disabled>Select Year</option>
                 {years.map((year) => (
@@ -569,7 +574,7 @@ export default function AdminPage() {
               </select>
               <button
                 onClick={downloadMonthlyReport}
-                className="py-2 px-4 bg-[#003087] text-white rounded hover:bg-[#002060] transition-colors font-medium"
+                className="py-2 px-4 bg-[#003087] text-white rounded hover:bg-[#002060] transition-colors font-medium w-full sm:w-auto text-sm sm:text-base"
               >
                 Download
               </button>
@@ -578,26 +583,26 @@ export default function AdminPage() {
         </div>
 
         {viewReport && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-            <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full">
-              <h2 className="text-xl font-bold text-[#003087] mb-4 font-['Poppins']">
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
+            <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg w-full max-w-md max-h-[90vh] overflow-y-auto">
+              <h2 className="text-lg sm:text-xl font-bold text-[#003087] mb-4 font-['Poppins']">
                 Report Details
               </h2>
-              <p className="text-gray-700">
+              <p className="text-gray-700 text-sm sm:text-base">
                 <span className="font-medium text-[#003087]">Type of Record:</span> {viewReport?.type_of_record}
               </p>
-              <p className="text-gray-700">
+              <p className="text-gray-700 text-sm sm:text-base">
                 <span className="font-medium text-[#003087]">Period Covered:</span> {viewReport?.period_covered}
               </p>
-              <p className="text-gray-700">
+              <p className="text-gray-700 text-sm sm:text-base">
                 <span className="font-medium text-[#003087]">Number of Pages:</span> {viewReport?.no_of_pages}
               </p>
-              <p className="text-gray-700">
+              <p className="text-gray-700 text-sm sm:text-base">
                 <span className="font-medium text-[#003087]">Role:</span> {viewReport?.role}
               </p>
               <button
                 onClick={() => setViewReport(null)}
-                className="mt-4 w-full py-2 bg-[#003087] text-white rounded hover:bg-[#002060] transition-colors font-medium"
+                className="mt-4 w-full py-2 bg-[#003087] text-white rounded hover:bg-[#002060] transition-colors font-medium text-sm sm:text-base"
               >
                 Close
               </button>
@@ -606,25 +611,25 @@ export default function AdminPage() {
         )}
 
         {showYearlyModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-            <div className="bg-white p-6 rounded-lg shadow-lg max-w-4xl w-full">
-              <h2 className="text-xl font-bold text-[#003087] mb-4 font-['Poppins']">
-                All Time Summary
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
+            <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+              <h2 className="text-lg sm:text-xl font-bold text-[#003087] mb-4 font-['Poppins']">
+                Summary for Year {new Date().getFullYear()}
               </h2>
 
-              <div className="mb-6">
+              <div className="mb-6 h-64 sm:h-80">
                 <Bar data={chartData} options={chartOptions} />
               </div>
 
-              <div className="overflow-x-auto max-h-96">
-                <table className="w-full border-collapse table-fixed">
+              <div className="overflow-x-auto max-h-60">
+                <table className="w-full border-collapse table-auto sm:table-fixed text-xs sm:text-sm">
                   <thead>
                     <tr className="bg-[#003087] text-white sticky top-0">
-                      <th className="p-2 text-left w-[50px]">No.</th>
-                      <th className="p-2 text-left w-[200px]">Type of Record</th>
-                      <th className="p-2 text-left w-[150px]">Period Covered</th>
-                      <th className="p-2 text-left w-[100px]">No. of Pages</th>
-                      <th className="p-2 text-left w-[100px]">Department</th>
+                      <th className="p-2 text-left sm:w-[50px]">No.</th>
+                      <th className="p-2 text-left sm:w-[200px]">Type of Record</th>
+                      <th className="p-2 text-left sm:w-[150px]">Period Covered</th>
+                      <th className="p-2 text-left sm:w-[100px]">No. of Pages</th>
+                      <th className="p-2 text-left sm:w-[100px]">Department</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -632,11 +637,11 @@ export default function AdminPage() {
                       .filter(r => ['MSD', 'ESD', 'LSD'].includes(r.role.toUpperCase()))
                       .map((r, index) => (
                         <tr key={r.id} className="border-b hover:bg-[#F5F6F5]">
-                          <td className="p-2 truncate" title={String(index + 1)}>{index + 1}</td>
-                          <td className="p-2 truncate" title={r.type_of_record}>{r.type_of_record}</td>
-                          <td className="p-2 truncate" title={r.period_covered}>{r.period_covered}</td>
-                          <td className="p-2 truncate" title={String(r.no_of_pages)}>{r.no_of_pages}</td>
-                          <td className="p-2 truncate" title={r.role}>{r.role}</td>
+                          <td className="p-2 truncate text-[#003087]" title={String(index + 1)}>{index + 1}</td>
+                          <td className="p-2 truncate text-[#003087]" title={r.type_of_record}>{r.type_of_record}</td>
+                          <td className="p-2 truncate text-[#003087]" title={r.period_covered}>{r.period_covered}</td>
+                          <td className="p-2 truncate text-[#003087]" title={String(r.no_of_pages)}>{r.no_of_pages}</td>
+                          <td className="p-2 truncate text-[#003087]" title={r.role}>{r.role}</td>
                         </tr>
                       ))}
                     <tr className="font-bold">
@@ -654,7 +659,7 @@ export default function AdminPage() {
 
               <button
                 onClick={() => setShowYearlyModal(false)}
-                className="mt-4 w-full py-2 bg-[#003087] text-white rounded hover:bg-[#002060] transition-colors font-medium"
+                className="mt-4 w-full py-2 bg-[#003087] text-white rounded hover:bg-[#002060] transition-colors font-medium text-sm sm:text-base"
               >
                 Close
               </button>
