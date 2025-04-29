@@ -551,7 +551,7 @@ export default function AdminPage() {
               <select
                 value={selectedMonth}
                 onChange={(e) => setSelectedMonth(e.target.value)}
-                className="border border-gray-300 rounded p-2 w-full sm:w-auto text-sm sm:text-base"
+                className="border border-gray-300 rounded p-2 w-full sm:w-auto text-sm sm:text-[#003087]"
               >
                 <option value="" disabled>Select Month</option>
                 {months.map((month) => (
@@ -563,7 +563,7 @@ export default function AdminPage() {
               <select
                 value={selectedYear}
                 onChange={(e) => setSelectedYear(e.target.value)}
-                className="border border-gray-300 rounded p-2 w-full sm:w-auto text-sm sm:text-base"
+                className="border border-gray-300 rounded p-2 w-full sm:w-auto text-sm sm:text-[#003087]"
               >
                 <option value="" disabled>Select Year</option>
                 {years.map((year) => (
