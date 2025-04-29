@@ -551,11 +551,11 @@ export default function AdminPage() {
               <select
                 value={selectedMonth}
                 onChange={(e) => setSelectedMonth(e.target.value)}
-                className="border border-gray-300 rounded p-2 w-full sm:w-auto text-sm sm:text-[#003087]"
+                className="border border-gray-300 rounded p-2 w-full sm:w-auto text-sm sm:text-base text-[#003087]"
               >
-                <option value="" disabled>Select Month</option>
+                <option value="" disabled className="text-gray-500">Select Month</option>
                 {months.map((month) => (
-                  <option key={month.value} value={month.value}>
+                  <option key={month.value} value={month.value} className="text-[#003087]">
                     {month.label}
                   </option>
                 ))}
@@ -563,11 +563,11 @@ export default function AdminPage() {
               <select
                 value={selectedYear}
                 onChange={(e) => setSelectedYear(e.target.value)}
-                className="border border-gray-300 rounded p-2 w-full sm:w-auto text-sm sm:text-[#003087]"
+                className="border border-gray-300 rounded p-2 w-full sm:w-auto text-sm sm:text-base text-[#003087]"
               >
-                <option value="" disabled>Select Year</option>
+                <option value="" disabled className="text-gray-500">Select Year</option>
                 {years.map((year) => (
-                  <option key={year} value={year}>
+                  <option key={year} value={year} className="text-[#003087]">
                     {year}
                   </option>
                 ))}
