@@ -28,7 +28,7 @@ export default function InputPage() {
   // Load user from localStorage and fetch categories
   useEffect(() => {
     const stored = localStorage.getItem('scanflow360_user')
-    if (!stored) return router.replace('/login')
+    if (!stored) return router.replace('/')
     const parsedUser = JSON.parse(stored)
     setUser(parsedUser)
 
