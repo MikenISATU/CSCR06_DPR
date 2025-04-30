@@ -33,7 +33,7 @@ export default function AdminPage() {
 
   useEffect(() => {
     const stored = localStorage.getItem('scanflow360_user')
-    if (!stored) return router.replace('/login')
+    if (!stored) return router.replace('/')
     const parsedUser = JSON.parse(stored)
     setUser(parsedUser)
     if (parsedUser.role !== 'ADMIN') {
