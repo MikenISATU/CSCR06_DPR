@@ -14,11 +14,10 @@ export default function LoginPage(): React.ReactElement {
   const [isLocked, setIsLocked] = useState<boolean>(false)
   const [lockoutTimestamp, setLockoutTimestamp] = useState<number | null>(null)
   const [remainingTime, setRemainingTime] = useState<number>(0)
-  const [clickCount, setClickCount] = useState<number>(0) // Track consecutive clicks/taps
-  const [showQuote, setShowQuote] = useState<boolean>(false) // Control quote modal visibility
+  const [clickCount, setClickCount] = useState<number>(0)
+  const [showQuote, setShowQuote] = useState<boolean>(false)
   const router = useRouter()
 
-  // Load saved credentials and rate limiting state on component mount
   useEffect(() => {
     const savedCredentials = localStorage.getItem('scanflow360_credentials')
     if (savedCredentials) {
@@ -53,7 +52,6 @@ export default function LoginPage(): React.ReactElement {
     }
   }, [])
 
-  // Update localStorage for rate limiting state
   useEffect(() => {
     localStorage.setItem('scanflow360_rate_limit', JSON.stringify({
       attempts: loginAttempts,
@@ -62,7 +60,6 @@ export default function LoginPage(): React.ReactElement {
     }))
   }, [loginAttempts, isLocked, lockoutTimestamp])
 
-  // Real-time countdown timer for lockout period
   useEffect(() => {
     if (isLocked && lockoutTimestamp) {
       const lockoutDuration = 5 * 60 * 1000
@@ -83,7 +80,6 @@ export default function LoginPage(): React.ReactElement {
     }
   }, [isLocked, lockoutTimestamp])
 
-  // Handle consecutive clicks/taps for Easter egg
   useEffect(() => {
     let clickTimeout: NodeJS.Timeout | null = null
 
@@ -92,7 +88,7 @@ export default function LoginPage(): React.ReactElement {
       if (clickTimeout) clearTimeout(clickTimeout)
 
       clickTimeout = setTimeout(() => {
-        setClickCount(0) // Reset if clicks are not consecutive within 1 second
+        setClickCount(0)
       }, 1000)
 
       if (clickCount + 1 === 7) {
@@ -101,7 +97,6 @@ export default function LoginPage(): React.ReactElement {
       }
     }
 
-    // Add event listeners for both mouse clicks and touch events
     window.addEventListener('click', handleClick)
     window.addEventListener('touchstart', handleClick)
 
@@ -112,14 +107,12 @@ export default function LoginPage(): React.ReactElement {
     }
   }, [clickCount])
 
-  // Format remaining time as MM:SS
   const formatTime = (seconds: number): string => {
     const minutes = Math.floor(seconds / 60)
     const secs = seconds % 60
     return `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
   }
 
-  // Reset rate limiting state
   const resetRateLimitState = () => {
     setIsLocked(false)
     setLoginAttempts(0)
@@ -373,13 +366,12 @@ export default function LoginPage(): React.ReactElement {
         </button>
       </form>
 
-      {/* Easter Egg Quote Modal */}
       {showQuote && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 max-w-sm w-full text-center shadow-lg">
             <h3 className="text-lg font-semibold text-[#003087] mb-4">A Little Encouragement</h3>
             <p className="text-sm text-gray-700 italic">
-              "Keep going, for you are the past you once prayed to become stronger, wiser, unstoppable."
+              \"Keep going, for you are the past you once prayed to become—stronger, wiser, unstoppable.\"
             </p>
             <p className="text-xs text-gray-500 mt-2">— M.K.N 2025</p>
             <button
