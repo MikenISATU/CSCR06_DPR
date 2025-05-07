@@ -371,7 +371,7 @@ export default function LoginPage(): React.ReactElement {
           <div className="bg-white rounded-lg p-6 max-w-sm w-full text-center shadow-lg">
             <h3 className="text-lg font-semibold text-[#003087] mb-4">A Little Encouragement</h3>
             <p className="text-sm text-gray-700 italic">
-              \"Keep going, for you are the past you once prayed to become—stronger, wiser, unstoppable.\"
+              Keep going, for you are the past you once prayed to become stronger, wiser, unstoppable.
             </p>
             <p className="text-xs text-gray-500 mt-2">— M.K.N 2025</p>
             <button
