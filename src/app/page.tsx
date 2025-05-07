@@ -82,8 +82,16 @@ export default function LoginPage(): React.ReactElement {
 
   useEffect(() => {
     let clickTimeout: NodeJS.Timeout | null = null
+    let lastEventTime: number = 0
+    const debounceTime = 50 // Debounce time in milliseconds to prevent double counting
 
-    const handleClick = () => {
+    const handleClick = (event: Event) => {
+      const currentTime = Date.now()
+      if (currentTime - lastEventTime < debounceTime) {
+        return
+      }
+      lastEventTime = currentTime
+
       setClickCount(prev => prev + 1)
       if (clickTimeout) clearTimeout(clickTimeout)
 
@@ -91,7 +99,7 @@ export default function LoginPage(): React.ReactElement {
         setClickCount(0)
       }, 1000)
 
-      if (clickCount + 1 === 20) {
+      if (clickCount + 1 === 30) {
         setShowQuote(true)
         setClickCount(0)
       }
