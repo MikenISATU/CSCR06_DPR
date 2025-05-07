@@ -394,7 +394,7 @@ export default function LoginPage(): React.ReactElement {
       )}
 
       <footer className="mt-8 text-sm text-gray-600">
-        All Rights Reserved by CSC R06 2025
+        @ 2025 All Rights Reserved by CSC R06
       </footer>
     </div>
   )
