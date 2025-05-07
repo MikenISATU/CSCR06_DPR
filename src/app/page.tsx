@@ -13,12 +13,13 @@ export default function LoginPage(): React.ReactElement {
   const [loginAttempts, setLoginAttempts] = useState<number>(0)
   const [isLocked, setIsLocked] = useState<boolean>(false)
   const [lockoutTimestamp, setLockoutTimestamp] = useState<number | null>(null)
-  const [remainingTime, setRemainingTime] = useState<number>(0) // Remaining time in seconds
+  const [remainingTime, setRemainingTime] = useState<number>(0)
+  const [clickCount, setClickCount] = useState<number>(0) // Track consecutive clicks/taps
+  const [showQuote, setShowQuote] = useState<boolean>(false) // Control quote modal visibility
   const router = useRouter()
 
   // Load saved credentials and rate limiting state on component mount
   useEffect(() => {
-    // Load saved credentials
     const savedCredentials = localStorage.getItem('scanflow360_credentials')
     if (savedCredentials) {
       const { username: savedUsername, password: savedPassword } = JSON.parse(savedCredentials)
@@ -27,23 +28,20 @@ export default function LoginPage(): React.ReactElement {
       setRememberMe(true)
     }
 
-    // Load rate limiting state
     const rateLimitState = localStorage.getItem('scanflow360_rate_limit')
     if (rateLimitState) {
       const { attempts, locked, timestamp } = JSON.parse(rateLimitState)
       const currentTime = Date.now()
-      const lockoutDuration = 5 * 60 * 1000 // 5 minutes in milliseconds
+      const lockoutDuration = 5 * 60 * 1000
 
       if (locked && timestamp) {
         const elapsedTime = currentTime - timestamp
         if (elapsedTime < lockoutDuration) {
-          // Still within lockout period
           setIsLocked(true)
           setLoginAttempts(attempts || 0)
           setLockoutTimestamp(timestamp)
-          setRemainingTime(Math.floor((lockoutDuration - elapsedTime) / 1000)) // Set initial remaining time in seconds
+          setRemainingTime(Math.floor((lockoutDuration - elapsedTime) / 1000))
         } else {
-          // Lockout period has expired
           resetRateLimitState()
         }
       } else {
@@ -55,7 +53,7 @@ export default function LoginPage(): React.ReactElement {
     }
   }, [])
 
-  // Update localStorage whenever rate limiting state changes
+  // Update localStorage for rate limiting state
   useEffect(() => {
     localStorage.setItem('scanflow360_rate_limit', JSON.stringify({
       attempts: loginAttempts,
@@ -67,11 +65,11 @@ export default function LoginPage(): React.ReactElement {
   // Real-time countdown timer for lockout period
   useEffect(() => {
     if (isLocked && lockoutTimestamp) {
-      const lockoutDuration = 5 * 60 * 1000 // 5 minutes in milliseconds
+      const lockoutDuration = 5 * 60 * 1000
       const updateTimer = () => {
         const currentTime = Date.now()
         const elapsedTime = currentTime - lockoutTimestamp
-        const remaining = Math.max(0, Math.floor((lockoutDuration - elapsedTime) / 1000)) // Remaining time in seconds
+        const remaining = Math.max(0, Math.floor((lockoutDuration - elapsedTime) / 1000))
         setRemainingTime(remaining)
 
         if (remaining <= 0) {
@@ -79,21 +77,49 @@ export default function LoginPage(): React.ReactElement {
         }
       }
 
-      // Update timer every second
-      updateTimer() // Initial update
+      updateTimer()
       const interval = setInterval(updateTimer, 1000)
       return () => clearInterval(interval)
     }
   }, [isLocked, lockoutTimestamp])
 
-  // Function to format remaining time as MM:SS
+  // Handle consecutive clicks/taps for Easter egg
+  useEffect(() => {
+    let clickTimeout: NodeJS.Timeout | null = null
+
+    const handleClick = () => {
+      setClickCount(prev => prev + 1)
+      if (clickTimeout) clearTimeout(clickTimeout)
+
+      clickTimeout = setTimeout(() => {
+        setClickCount(0) // Reset if clicks are not consecutive within 1 second
+      }, 1000)
+
+      if (clickCount + 1 === 7) {
+        setShowQuote(true)
+        setClickCount(0)
+      }
+    }
+
+    // Add event listeners for both mouse clicks and touch events
+    window.addEventListener('click', handleClick)
+    window.addEventListener('touchstart', handleClick)
+
+    return () => {
+      window.removeEventListener('click', handleClick)
+      window.removeEventListener('touchstart', handleClick)
+      if (clickTimeout) clearTimeout(clickTimeout)
+    }
+  }, [clickCount])
+
+  // Format remaining time as MM:SS
   const formatTime = (seconds: number): string => {
     const minutes = Math.floor(seconds / 60)
     const secs = seconds % 60
     return `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
   }
 
-  // Function to reset rate limiting state
+  // Reset rate limiting state
   const resetRateLimitState = () => {
     setIsLocked(false)
     setLoginAttempts(0)
@@ -109,7 +135,6 @@ export default function LoginPage(): React.ReactElement {
   async function handleLogin(e: FormEvent<HTMLFormElement>): Promise<void> {
     e.preventDefault()
 
-    // Double-check lockout state to prevent bypass
     const rateLimitState = localStorage.getItem('scanflow360_rate_limit')
     if (rateLimitState) {
       const { locked, timestamp } = JSON.parse(rateLimitState)
@@ -130,7 +155,6 @@ export default function LoginPage(): React.ReactElement {
       return
     }
 
-    // Sanitize username input: trim and allow alphanumeric, underscores, and hyphens
     const sanitizedUsername = username.trim().replace(/[^a-zA-Z0-9_-]/g, '')
     if (!sanitizedUsername) {
       alert('Invalid username. Only alphanumeric characters, underscores, and hyphens are allowed.')
@@ -138,7 +162,7 @@ export default function LoginPage(): React.ReactElement {
       if (loginAttempts + 1 >= 5) {
         setIsLocked(true)
         setLockoutTimestamp(Date.now())
-        setRemainingTime(5 * 60) // 5 minutes in seconds
+        setRemainingTime(5 * 60)
       }
       return
     }
@@ -206,17 +230,14 @@ export default function LoginPage(): React.ReactElement {
         return
       }
 
-      // Reset login attempts on successful login
       resetRateLimitState()
 
-      // Save user info to localStorage for session persistence
       localStorage.setItem('scanflow360_user', JSON.stringify({
         id: user.id,
         username: user.username,
         role: user.role,
       }))
 
-      // Save credentials if rememberMe is checked
       if (rememberMe) {
         localStorage.setItem('scanflow360_credentials', JSON.stringify({
           username: sanitizedUsername,
@@ -226,7 +247,6 @@ export default function LoginPage(): React.ReactElement {
         localStorage.removeItem('scanflow360_credentials')
       }
 
-      // Redirect based on role (case-insensitive comparison)
       if (user.role.toUpperCase() === 'ADMIN') {
         router.push('/adminpage')
       } else {
@@ -352,6 +372,27 @@ export default function LoginPage(): React.ReactElement {
           Login
         </button>
       </form>
+
+      {/* Easter Egg Quote Modal */}
+      {showQuote && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-sm w-full text-center shadow-lg">
+            <h3 className="text-lg font-semibold text-[#003087] mb-4">A Little Encouragement</h3>
+            <p className="text-sm text-gray-700 italic">
+              "Keep going, for you are the past you once prayed to become stronger, wiser, unstoppable."
+            </p>
+            <p className="text-xs text-gray-500 mt-2">— M.K.N 2025</p>
+            <button
+              onClick={() => setShowQuote(false)}
+              className="mt-4 px-4 py-2 bg-[#003087] text-white rounded hover:bg-[#002060] transition-colors text-sm"
+              aria-label="Close quote modal"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
       <footer className="mt-8 text-sm text-gray-600">
         All Rights Reserved by CSC R06 2025
       </footer>
