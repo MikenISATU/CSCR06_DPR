@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, FormEvent } from 'react'
+import React, { useState, FormEvent, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image' 
 import { supabase } from './supbase'
@@ -8,16 +8,43 @@ import { supabase } from './supbase'
 export default function LoginPage(): React.ReactElement {
   const [username, setUsername] = useState<string>('')
   const [password, setPassword] = useState<string>('')
+  const [rememberMe, setRememberMe] = useState<boolean>(false)
   const router = useRouter()
+
+  // Load saved credentials on component mount
+  useEffect(() => {
+    const savedCredentials = localStorage.getItem('scanflow360_credentials')
+    if (savedCredentials) {
+      const { username: savedUsername, password: savedPassword } = JSON.parse(savedCredentials)
+      setUsername(savedUsername || '')
+      setPassword(savedPassword || '')
+      setRememberMe(true)
+    }
+  }, [])
 
   async function handleLogin(e: FormEvent<HTMLFormElement>): Promise<void> {
     e.preventDefault()
-    const usernameToQuery = username.trim()
+    
+    // Sanitize username input: trim and allow alphanumeric, underscores, and hyphens
+    // Explicitly supports usernames with underscores (_)
+    const sanitizedUsername = username.trim().replace(/[^a-zA-Z0-9_-]/g, '')
+    if (!sanitizedUsername) {
+      alert('Invalid username. Only alphanumeric characters, underscores, and hyphens are allowed.')
+      return
+    }
+
+    if (!password) {
+      alert('Password cannot be empty.')
+      return
+    }
+
     try {
+      // Note: Supabase client uses parameterized queries, which helps prevent SQL injection
+      // Passwords are not sanitized and can include special characters like @, #, $, etc.
       const { data: users, error } = await supabase
         .from('users2')
         .select('id, username, password, role')
-        .eq('username', usernameToQuery)
+        .eq('username', sanitizedUsername)
 
       if (error) {
         alert('Error fetching user: ' + error.message)
@@ -36,6 +63,9 @@ export default function LoginPage(): React.ReactElement {
 
       const user = users[0]
 
+      // SECURITY NOTE: In a real application, passwords should be hashed (e.g., using bcrypt)
+      // and compared server-side. Comparing plain-text passwords is insecure.
+      // Passwords can include special characters (@, #, $, etc.) as they are not sanitized.
       if (user.password !== password) {
         alert('Wrong username or password')
         return
@@ -48,6 +78,18 @@ export default function LoginPage(): React.ReactElement {
         role: user.role,
       }))
 
+      // Save both username and password if rememberMe is checked
+      // SECURITY WARNING: Storing passwords in localStorage is highly insecure due to XSS vulnerabilities.
+      // In a production app, never store passwords client-side; use secure tokens (e.g., JWT) instead.
+      if (rememberMe) {
+        localStorage.setItem('scanflow360_credentials', JSON.stringify({
+          username: sanitizedUsername,
+          password: password,
+        }))
+      } else {
+        localStorage.removeItem('scanflow360_credentials')
+      }
+
       // Redirect based on role (case-insensitive comparison)
       if (user.role.toUpperCase() === 'ADMIN') {
         router.push('/adminpage')
@@ -55,7 +97,7 @@ export default function LoginPage(): React.ReactElement {
         router.push('/inputpage')
       }
     } catch (err) {
-      alert('Unexpected error: ' + err)
+      alert('Unexpected error: ' + (err instanceof Error ? err.message : String(err)))
     }
   }
 
@@ -83,7 +125,7 @@ export default function LoginPage(): React.ReactElement {
             <input
               type="text"
               required
-              className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[#003087] transition-colors text-[#003087] text-sm sm:text-base placeholder-gray-500"
+              className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[#003087] transition-colors text-[#003087] text-sm sm:text-base placeholder-gray-400"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               placeholder="Enter your username"
@@ -96,11 +138,23 @@ export default function LoginPage(): React.ReactElement {
             <input
               type="password"
               required
-              className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[#003087] transition-colors text-[#003087] text-sm sm:text-base placeholder-gray-500"
+              className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[#003087] transition-colors text-[#003087] text-sm sm:text-base placeholder-gray-400"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Enter your password"
             />
+          </div>
+          <div className="flex items-center">
+            <input
+              type="checkbox"
+              id="rememberMe"
+              checked={rememberMe}
+              onChange={(e) => setRememberMe(e.target.checked)}
+              className="mr-2 h-4 w-4 text-[#C8102E] focus:ring-[#C8102E] border-gray-300 rounded accent-[#C8102E]"
+            />
+            <label htmlFor="rememberMe" className="text-sm text-[#003087]">
+              Remember me
+            </label>
           </div>
         </div>
         <button
@@ -110,6 +164,9 @@ export default function LoginPage(): React.ReactElement {
           Login
         </button>
       </form>
+      <footer className="mt-8 text-sm text-gray-600">
+        All rights reserved by CSC R06 2025
+      </footer>
     </div>
   )
 }
