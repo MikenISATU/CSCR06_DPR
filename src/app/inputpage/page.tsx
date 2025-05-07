@@ -18,27 +18,27 @@ export default function InputPage() {
   const router = useRouter()
   const [user, setUser] = useState<User | null>(null)
   const [typeOfRecord, setTypeOfRecord] = useState('')
+  const [customType, setCustomType] = useState('')
   const [periodCovered, setPeriodCovered] = useState('')
   const [noOfPages, setNoOfPages] = useState(0)
   const [reports, setReports] = useState<Report[]>([])
   const [viewReport, setViewReport] = useState<Report | null>(null)
   const [showMonthlySummary, setShowMonthlySummary] = useState(false)
-  const [categories, setCategories] = useState<string[]>([]) // State for dynamic categories
+  const [categories, setCategories] = useState<string[]>([])
 
-  // Load user from localStorage and fetch categories
   useEffect(() => {
     const stored = localStorage.getItem('scanflow360_user')
-    if (!stored) return router.replace('/')
+    if (!stored) {
+      router.replace('/')
+      return
+    }
     const parsedUser = JSON.parse(stored)
     setUser(parsedUser)
-
-    // Fetch categories for the user's role
     if (parsedUser) {
       fetchCategories(parsedUser.role)
     }
   }, [router])
 
-  // Fetch user's reports
   useEffect(() => {
     if (user) fetchReports()
   }, [user])
@@ -55,7 +55,7 @@ export default function InputPage() {
     }
 
     const categoryList = data?.map((item: { category: string }) => item.category) || []
-    setCategories(categoryList)
+    setCategories([...categoryList, 'Other'])
   }
 
   async function fetchReports() {
@@ -75,9 +75,13 @@ export default function InputPage() {
     e.preventDefault()
     if (!typeOfRecord) return alert('Select a type of record')
     if (!periodCovered) return alert('Enter period covered')
+    if (typeOfRecord === 'Other' && !customType) return alert('Enter a custom type of record')
+
+    const finalType = typeOfRecord === 'Other' ? customType : typeOfRecord
+
     const { error } = await supabase.from('monthly_reports1').upsert({
       useriud: user!.id,
-      type_of_record: typeOfRecord,
+      type_of_record: finalType,
       period_covered: periodCovered,
       no_of_pages: noOfPages,
     })
@@ -86,6 +90,7 @@ export default function InputPage() {
       return
     }
     setTypeOfRecord('')
+    setCustomType('')
     setPeriodCovered('')
     setNoOfPages(0)
     fetchReports()
@@ -105,13 +110,11 @@ export default function InputPage() {
     router.replace('/')
   }
 
-  // Function to truncate long type_of_record names
   function truncateRecordName(name: string, maxLength: number = 20): string {
     if (name.length <= maxLength) return name
     return `${name.substring(0, maxLength - 3)}...`
   }
 
-  // Function to apply styles to Excel cells
   function applyStyles(worksheet: XLSX.WorkSheet, startRow: number, endRow: number, numCols: number, isHeader: boolean = false, centerText: boolean = false) {
     for (let row = startRow; row <= endRow; row++) {
       for (let col = 0; col < numCols; col++) {
@@ -134,31 +137,50 @@ export default function InputPage() {
     }
   }
 
-  // Function to generate a report for the current month in Excel format
-  function generateMonthlyReport() {
+  function generateReport(periodType: 'monthly' | 'semestral' | 'yearly') {
     const currentDate = new Date()
-    const currentMonth = currentDate.getMonth() + 1 // 1-12
+    const currentMonth = currentDate.getMonth() + 1
     const currentYear = currentDate.getFullYear()
-    const monthName = currentDate.toLocaleString('default', { month: 'long' })
+    let reportTitle: string
+    let filteredReports: Report[]
+    let periodName: string
 
-    // Filter reports for the current month using created_at
-    const monthlyReports = reports.filter((report) => {
-      if (!report.created_at) return false
-      const reportDate = new Date(report.created_at)
-      return (
-        reportDate.getMonth() + 1 === currentMonth &&
-        reportDate.getFullYear() === currentYear
-      )
-    })
+    if (periodType === 'monthly') {
+      reportTitle = `For the month of ${currentDate.toLocaleString('default', { month: 'long' })} ${currentYear}`
+      periodName = `${currentDate.toLocaleString('default', { month: 'long' })}_${currentYear}`
+      filteredReports = reports.filter((report) => {
+        if (!report.created_at) return false
+        const reportDate = new Date(report.created_at)
+        return reportDate.getMonth() + 1 === currentMonth && reportDate.getFullYear() === currentYear
+      })
+    } else if (periodType === 'semestral') {
+      const semester = currentMonth <= 6 ? 'First' : 'Second'
+      reportTitle = `${semester} Semester ${currentYear}`
+      periodName = `${semester}_Semester_${currentYear}`
+      filteredReports = reports.filter((report) => {
+        if (!report.created_at) return false
+        const reportDate = new Date(report.created_at)
+        return reportDate.getFullYear() === currentYear && 
+               ((semester === 'First' && reportDate.getMonth() + 1 <= 6) ||
+                (semester === 'Second' && reportDate.getMonth() + 1 > 6))
+      })
+    } else {
+      reportTitle = `For the Year ${currentYear}`
+      periodName = `Year_${currentYear}`
+      filteredReports = reports.filter((report) => {
+        if (!report.created_at) return false
+        const reportDate = new Date(report.created_at)
+        return reportDate.getFullYear() === currentYear
+      })
+    }
 
-    if (monthlyReports.length === 0) {
-      alert(`No reports found for ${monthName} ${currentYear}.`)
+    if (filteredReports.length === 0) {
+      alert(`No reports found for ${reportTitle}.`)
       return
     }
 
-    // Group reports by type_of_record and period_covered
     const groupedReports: { [key: string]: { periods: { period: string; pages: number }[] } } = {}
-    monthlyReports.forEach((report) => {
+    filteredReports.forEach((report) => {
       const key = report.type_of_record
       const period = report.period_covered
       if (!groupedReports[key]) {
@@ -167,23 +189,17 @@ export default function InputPage() {
       groupedReports[key].periods.push({ period, pages: report.no_of_pages })
     })
 
-    // Create Excel worksheet
     const worksheet: XLSX.WorkSheet = XLSX.utils.aoa_to_sheet([])
-
-    // Title and Header
     XLSX.utils.sheet_add_aoa(worksheet, [[user?.role.toUpperCase()]], { origin: "B1" })
-    XLSX.utils.sheet_add_aoa(worksheet, [[`For the month of ${monthName} ${currentYear}`]], { origin: "B2" })
+    XLSX.utils.sheet_add_aoa(worksheet, [[reportTitle]], { origin: "B2" })
 
-    // Merge cells for headers
     worksheet['!merges'] = [
       { s: { r: 0, c: 1 }, e: { r: 0, c: 3 } },
       { s: { r: 1, c: 1 }, e: { r: 1, c: 3 } },
     ]
 
-    // Apply centered styling to headers
     applyStyles(worksheet, 0, 1, 4, true, true)
 
-    // Table Header
     let currentRow: number = 4
     const tableHeader: string[] = ["No.", "Type of Record", "Period Covered", "No. of Pages"]
     XLSX.utils.sheet_add_aoa(worksheet, [tableHeader], { origin: "A" + currentRow })
@@ -196,12 +212,10 @@ export default function InputPage() {
 
     Object.entries(groupedReports).forEach(([type, { periods }]) => {
       if (periods.length > 1) {
-        // Main record row
         const mainRow = [reportIndex++, type, "", ""]
         XLSX.utils.sheet_add_aoa(worksheet, [mainRow], { origin: "A" + currentRow })
         currentRow++
 
-        // Sub-rows for each period
         periods.forEach((p, idx) => {
           const pages = idx === 0 ? p.pages : ""
           totalPages += idx === 0 ? p.pages : 0
@@ -210,7 +224,6 @@ export default function InputPage() {
           currentRow++
         })
       } else {
-        // Single period record
         const singleRow = [reportIndex++, type, periods[0].period, periods[0].pages]
         totalPages += periods[0].pages
         XLSX.utils.sheet_add_aoa(worksheet, [singleRow], { origin: "A" + currentRow })
@@ -220,12 +233,10 @@ export default function InputPage() {
 
     applyStyles(worksheet, 4, currentRow - 1, tableHeader.length)
 
-    // Total Row
     const totalRow = ["", "TOTAL NO. OF PAGES", "", totalPages]
     XLSX.utils.sheet_add_aoa(worksheet, [totalRow], { origin: "A" + currentRow })
     applyStyles(worksheet, currentRow - 1, currentRow - 1, tableHeader.length, true)
 
-    // Set column widths
     worksheet['!cols'] = [
       { wch: 5 },
       { wch: 50 },
@@ -233,20 +244,17 @@ export default function InputPage() {
       { wch: 15 },
     ]
 
-    // Create and download the Excel file
     const workbook = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(workbook, worksheet, `${monthName}_${currentYear}_Report`)
-    XLSX.writeFile(workbook, `${monthName}_${currentYear}_Report.xlsx`)
+    XLSX.utils.book_append_sheet(workbook, worksheet, `${periodName}_Report`)
+    XLSX.writeFile(workbook, `${periodName}_Report.xlsx`)
   }
 
-  // Function to view the monthly summary
   function viewMonthlySummary() {
     setShowMonthlySummary(true)
   }
 
-  // Prepare data for the chart
   const currentDate = new Date()
-  const currentMonth = currentDate.getMonth() + 1 // 1-12
+  const currentMonth = currentDate.getMonth() + 1
   const currentYear = currentDate.getFullYear()
   const monthName = currentDate.toLocaleString('default', { month: 'long' })
 
@@ -260,7 +268,7 @@ export default function InputPage() {
   })
 
   const chartData = {
-    labels: [...new Set(monthlyReports.map(r => r.type_of_record))], // Unique record types
+    labels: [...new Set(monthlyReports.map(r => r.type_of_record))],
     datasets: [
       {
         label: `Total Pages (${monthName} ${currentYear})`,
@@ -305,10 +313,51 @@ export default function InputPage() {
     },
   }
 
+  const getViewReportChartData = (report: Report) => ({
+    labels: [report.type_of_record],
+    datasets: [
+      {
+        label: `Pages (${report.period_covered})`,
+        data: [report.no_of_pages],
+        backgroundColor: '#003087',
+        borderColor: '#002060',
+        borderWidth: 1,
+      },
+    ],
+  })
+
+  const viewReportChartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'top' as const,
+      },
+      title: {
+        display: true,
+        text: `Pages for ${viewReport?.type_of_record} (${viewReport?.period_covered})`,
+      },
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        title: {
+          display: true,
+          text: 'Number of Pages',
+        },
+      },
+      x: {
+        title: {
+          display: true,
+          text: 'Type of Record',
+        },
+      },
+    },
+  }
+
   return (
     <div className="min-h-screen bg-[#F5F6F5] flex items-center justify-center p-4 sm:p-6">
-      <div className="w-full max-w-3xl bg-white rounded-lg shadow-lg p-4 sm:p-6">
-        {/* Header */}
+      <div className="w-full max-w-5xl bg-white rounded-lg shadow-lg p-4 sm:p-6">
         <header className="flex flex-col sm:flex-row justify-between items-center mb-6 space-y-4 sm:space-y-0">
           <div className="flex flex-col sm:flex-row items-center space-y-4 sm:space-y-0 sm:space-x-4">
             <Image
@@ -338,7 +387,6 @@ export default function InputPage() {
           </button>
         </header>
 
-        {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-4 mb-8">
           <div>
             <label className="block mb-1 text-sm font-medium text-[#003087]">
@@ -346,7 +394,10 @@ export default function InputPage() {
             </label>
             <select
               value={typeOfRecord}
-              onChange={(e) => setTypeOfRecord(e.target.value)}
+              onChange={(e) => {
+                setTypeOfRecord(e.target.value)
+                if (e.target.value !== 'Other') setCustomType('')
+              }}
               className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[#003087] transition-colors text-[#003087] placeholder-gray-500 text-sm sm:text-base"
               required
             >
@@ -358,6 +409,23 @@ export default function InputPage() {
               ))}
             </select>
           </div>
+
+          {typeOfRecord === 'Other' && (
+            <div>
+              <label className="block mb-1 text-sm font-medium text-[#003087]">
+                Custom Type of Record
+              </label>
+              <input
+                type="text"
+                value={customType}
+                onChange={(e) => setCustomType(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[#003087] transition-colors text-black placeholder-gray-500 text-sm sm:text-base"
+                placeholder="Enter custom record type"
+                required
+              />
+            </div>
+          )}
+
           <div>
             <label className="block mb-1 text-sm font-medium text-[#003087]">
               Period Covered
@@ -392,7 +460,6 @@ export default function InputPage() {
           </button>
         </form>
 
-        {/* Buttons for Monthly Report and Summary */}
         <div className="mb-8 flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4">
           <button
             onClick={viewMonthlySummary}
@@ -401,14 +468,25 @@ export default function InputPage() {
             View Summary for This Month
           </button>
           <button
-            onClick={generateMonthlyReport}
+            onClick={() => generateReport('monthly')}
             className="w-full py-2 bg-[#C1272D] text-white rounded hover:bg-[#a12025] transition-colors font-medium text-sm sm:text-base"
           >
-            Generate Report for This Month
+            Download Monthly Report
+          </button>
+          <button
+            onClick={() => generateReport('semestral')}
+            className="w-full py-2 bg-[#C1272D] text-white rounded hover:bg-[#a12025] transition-colors font-medium text-sm sm:text-base"
+          >
+            Download Semestral Report
+          </button>
+          <button
+            onClick={() => generateReport('yearly')}
+            className="w-full py-2 bg-[#C1272D] text-white rounded hover:bg-[#a12025] transition-colors font-medium text-sm sm:text-base"
+          >
+            Download Yearly Report
           </button>
         </div>
 
-        {/* Reports List with Scrollable Container */}
         <div className="max-h-60 overflow-y-auto">
           <div className="space-y-4">
             {reports.length === 0 ? (
@@ -447,7 +525,6 @@ export default function InputPage() {
           </div>
         </div>
 
-        {/* Modal for Viewing Report */}
         {viewReport && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
             <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg w-full max-w-md max-h-[90vh] overflow-y-auto">
@@ -466,6 +543,9 @@ export default function InputPage() {
                 <span className="font-medium text-[#003087]">Number of Pages Scanned:</span>{' '}
                 {viewReport?.no_of_pages}
               </p>
+              <div className="mt-4 h-48">
+                <Bar data={getViewReportChartData(viewReport)} options={viewReportChartOptions} />
+              </div>
               <button
                 onClick={() => setViewReport(null)}
                 className="mt-4 w-full py-2 bg-[#003087] text-white rounded hover:bg-[#002060] transition-colors font-medium text-sm sm:text-base"
@@ -476,18 +556,15 @@ export default function InputPage() {
           </div>
         )}
 
-        {/* Modal for Monthly Summary */}
         {showMonthlySummary && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
             <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto">
               <h2 className="text-lg sm:text-xl font-bold text-[#003087] mb-4 font-['Poppins']">
                 Summary for {monthName} {currentYear}
               </h2>
-
               <div className="mb-6 h-64 sm:h-80">
                 <Bar data={chartData} options={chartOptions} />
               </div>
-
               <div className="overflow-x-auto max-h-60">
                 <table className="w-full border-collapse table-auto sm:table-fixed text-xs sm:text-sm">
                   <thead>
@@ -516,7 +593,6 @@ export default function InputPage() {
                   </tbody>
                 </table>
               </div>
-
               <button
                 onClick={() => setShowMonthlySummary(false)}
                 className="mt-4 w-full py-2 bg-[#003087] text-white rounded hover:bg-[#002060] transition-colors font-medium text-sm sm:text-base"
