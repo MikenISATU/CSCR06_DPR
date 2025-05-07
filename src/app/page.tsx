@@ -9,13 +9,16 @@ export default function LoginPage(): React.ReactElement {
   const [username, setUsername] = useState<string>('')
   const [password, setPassword] = useState<string>('')
   const [rememberMe, setRememberMe] = useState<boolean>(false)
-  const [showPassword, setShowPassword] = useState<boolean>(false) // State for password visibility toggle
-  const [loginAttempts, setLoginAttempts] = useState<number>(0) // Track login attempts for rate limiting
-  const [isLocked, setIsLocked] = useState<boolean>(false) // Lock login after too many attempts
+  const [showPassword, setShowPassword] = useState<boolean>(false)
+  const [loginAttempts, setLoginAttempts] = useState<number>(0)
+  const [isLocked, setIsLocked] = useState<boolean>(false)
+  const [lockoutTimestamp, setLockoutTimestamp] = useState<number | null>(null)
+  const [remainingTime, setRemainingTime] = useState<number>(0) // Remaining time in seconds
   const router = useRouter()
 
-  // Load saved credentials on component mount
+  // Load saved credentials and rate limiting state on component mount
   useEffect(() => {
+    // Load saved credentials
     const savedCredentials = localStorage.getItem('scanflow360_credentials')
     if (savedCredentials) {
       const { username: savedUsername, password: savedPassword } = JSON.parse(savedCredentials)
@@ -23,25 +26,107 @@ export default function LoginPage(): React.ReactElement {
       setPassword(savedPassword || '')
       setRememberMe(true)
     }
+
+    // Load rate limiting state
+    const rateLimitState = localStorage.getItem('scanflow360_rate_limit')
+    if (rateLimitState) {
+      const { attempts, locked, timestamp } = JSON.parse(rateLimitState)
+      const currentTime = Date.now()
+      const lockoutDuration = 5 * 60 * 1000 // 5 minutes in milliseconds
+
+      if (locked && timestamp) {
+        const elapsedTime = currentTime - timestamp
+        if (elapsedTime < lockoutDuration) {
+          // Still within lockout period
+          setIsLocked(true)
+          setLoginAttempts(attempts || 0)
+          setLockoutTimestamp(timestamp)
+          setRemainingTime(Math.floor((lockoutDuration - elapsedTime) / 1000)) // Set initial remaining time in seconds
+        } else {
+          // Lockout period has expired
+          resetRateLimitState()
+        }
+      } else {
+        setLoginAttempts(attempts || 0)
+        setIsLocked(false)
+        setLockoutTimestamp(null)
+        setRemainingTime(0)
+      }
+    }
   }, [])
 
-  // Reset login attempts after a delay (e.g., 5 minutes) if locked
+  // Update localStorage whenever rate limiting state changes
   useEffect(() => {
-    if (isLocked) {
-      const timer = setTimeout(() => {
-        setIsLocked(false)
-        setLoginAttempts(0)
-      }, 5 * 60 * 1000) // 5 minutes lockout
-      return () => clearTimeout(timer)
+    localStorage.setItem('scanflow360_rate_limit', JSON.stringify({
+      attempts: loginAttempts,
+      locked: isLocked,
+      timestamp: lockoutTimestamp,
+    }))
+  }, [loginAttempts, isLocked, lockoutTimestamp])
+
+  // Real-time countdown timer for lockout period
+  useEffect(() => {
+    if (isLocked && lockoutTimestamp) {
+      const lockoutDuration = 5 * 60 * 1000 // 5 minutes in milliseconds
+      const updateTimer = () => {
+        const currentTime = Date.now()
+        const elapsedTime = currentTime - lockoutTimestamp
+        const remaining = Math.max(0, Math.floor((lockoutDuration - elapsedTime) / 1000)) // Remaining time in seconds
+        setRemainingTime(remaining)
+
+        if (remaining <= 0) {
+          resetRateLimitState()
+        }
+      }
+
+      // Update timer every second
+      updateTimer() // Initial update
+      const interval = setInterval(updateTimer, 1000)
+      return () => clearInterval(interval)
     }
-  }, [isLocked])
+  }, [isLocked, lockoutTimestamp])
+
+  // Function to format remaining time as MM:SS
+  const formatTime = (seconds: number): string => {
+    const minutes = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+  }
+
+  // Function to reset rate limiting state
+  const resetRateLimitState = () => {
+    setIsLocked(false)
+    setLoginAttempts(0)
+    setLockoutTimestamp(null)
+    setRemainingTime(0)
+    localStorage.setItem('scanflow360_rate_limit', JSON.stringify({
+      attempts: 0,
+      locked: false,
+      timestamp: null,
+    }))
+  }
 
   async function handleLogin(e: FormEvent<HTMLFormElement>): Promise<void> {
     e.preventDefault()
 
-    // Simulate rate limiting: lock after 5 failed attempts
+    // Double-check lockout state to prevent bypass
+    const rateLimitState = localStorage.getItem('scanflow360_rate_limit')
+    if (rateLimitState) {
+      const { locked, timestamp } = JSON.parse(rateLimitState)
+      if (locked && timestamp) {
+        const elapsedTime = Date.now() - timestamp
+        const lockoutDuration = 5 * 60 * 1000
+        if (elapsedTime < lockoutDuration) {
+          alert(`Too many failed attempts. Please wait ${formatTime(Math.floor((lockoutDuration - elapsedTime) / 1000))} before trying again.`)
+          return
+        } else {
+          resetRateLimitState()
+        }
+      }
+    }
+
     if (isLocked) {
-      alert('Too many failed attempts. Please wait 5 minutes before trying again.')
+      alert(`Too many failed attempts. Please wait ${formatTime(remainingTime)} before trying again.`)
       return
     }
 
@@ -50,14 +135,22 @@ export default function LoginPage(): React.ReactElement {
     if (!sanitizedUsername) {
       alert('Invalid username. Only alphanumeric characters, underscores, and hyphens are allowed.')
       setLoginAttempts(prev => prev + 1)
-      if (loginAttempts + 1 >= 5) setIsLocked(true)
+      if (loginAttempts + 1 >= 5) {
+        setIsLocked(true)
+        setLockoutTimestamp(Date.now())
+        setRemainingTime(5 * 60) // 5 minutes in seconds
+      }
       return
     }
 
     if (!password) {
       alert('Password cannot be empty.')
       setLoginAttempts(prev => prev + 1)
-      if (loginAttempts + 1 >= 5) setIsLocked(true)
+      if (loginAttempts + 1 >= 5) {
+        setIsLocked(true)
+        setLockoutTimestamp(Date.now())
+        setRemainingTime(5 * 60)
+      }
       return
     }
 
@@ -70,21 +163,33 @@ export default function LoginPage(): React.ReactElement {
       if (error) {
         alert('Error fetching user: ' + error.message)
         setLoginAttempts(prev => prev + 1)
-        if (loginAttempts + 1 >= 5) setIsLocked(true)
+        if (loginAttempts + 1 >= 5) {
+          setIsLocked(true)
+          setLockoutTimestamp(Date.now())
+          setRemainingTime(5 * 60)
+        }
         return
       }
 
       if (!users || users.length === 0) {
         alert('User not found')
         setLoginAttempts(prev => prev + 1)
-        if (loginAttempts + 1 >= 5) setIsLocked(true)
+        if (loginAttempts + 1 >= 5) {
+          setIsLocked(true)
+          setLockoutTimestamp(Date.now())
+          setRemainingTime(5 * 60)
+        }
         return
       }
 
       if (users.length > 1) {
         alert('Multiple users found with this username. Please contact support.')
         setLoginAttempts(prev => prev + 1)
-        if (loginAttempts + 1 >= 5) setIsLocked(true)
+        if (loginAttempts + 1 >= 5) {
+          setIsLocked(true)
+          setLockoutTimestamp(Date.now())
+          setRemainingTime(5 * 60)
+        }
         return
       }
 
@@ -93,13 +198,16 @@ export default function LoginPage(): React.ReactElement {
       if (user.password !== password) {
         alert('Wrong username or password')
         setLoginAttempts(prev => prev + 1)
-        if (loginAttempts + 1 >= 5) setIsLocked(true)
+        if (loginAttempts + 1 >= 5) {
+          setIsLocked(true)
+          setLockoutTimestamp(Date.now())
+          setRemainingTime(5 * 60)
+        }
         return
       }
 
       // Reset login attempts on successful login
-      setLoginAttempts(0)
-      setIsLocked(false)
+      resetRateLimitState()
 
       // Save user info to localStorage for session persistence
       localStorage.setItem('scanflow360_user', JSON.stringify({
@@ -127,7 +235,11 @@ export default function LoginPage(): React.ReactElement {
     } catch (err) {
       alert('Unexpected error: ' + (err instanceof Error ? err.message : String(err)))
       setLoginAttempts(prev => prev + 1)
-      if (loginAttempts + 1 >= 5) setIsLocked(true)
+      if (loginAttempts + 1 >= 5) {
+        setIsLocked(true)
+        setLockoutTimestamp(Date.now())
+        setRemainingTime(5 * 60)
+      }
     }
   }
 
@@ -168,13 +280,9 @@ export default function LoginPage(): React.ReactElement {
               onChange={(e) => setUsername(e.target.value)}
               placeholder="Enter your username"
               aria-required="true"
-              aria-describedby="username-error"
+              aria-describedby="login-error"
+              disabled={isLocked}
             />
-            {loginAttempts > 0 && (
-              <p id="username-error" className="text-xs text-[#C1272D] mt-1">
-                {loginAttempts < 5 ? `Attempts remaining: ${5 - loginAttempts}` : 'Account locked. Please wait 5 minutes.'}
-              </p>
-            )}
           </div>
           <div className="relative">
             <label 
@@ -192,22 +300,26 @@ export default function LoginPage(): React.ReactElement {
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Enter your password"
               aria-required="true"
-              aria-describedby="password-error"
+              aria-describedby="login-error"
+              disabled={isLocked}
             />
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
               className="absolute right-2 top-9 text-[#003087] hover:text-[#002060] focus:outline-none"
               aria-label={showPassword ? "Hide password" : "Show password"}
+              disabled={isLocked}
             >
               {showPassword ? "Hide" : "Show"}
             </button>
-            {loginAttempts > 0 && (
-              <p id="password-error" className="text-xs text-[#C1272D] mt-1">
-                {loginAttempts < 5 ? `Attempts remaining: ${5 - loginAttempts}` : 'Account locked. Please wait 5 minutes.'}
-              </p>
-            )}
           </div>
+          {loginAttempts > 0 && (
+            <p id="login-error" className="text-xs text-[#C1272D] mt-1">
+              {loginAttempts < 5 
+                ? `Attempts remaining: ${5 - loginAttempts}` 
+                : `Account locked. Please wait ${formatTime(remainingTime)}`}
+            </p>
+          )}
           <div className="flex items-center">
             <input
               type="checkbox"
@@ -216,6 +328,7 @@ export default function LoginPage(): React.ReactElement {
               onChange={(e) => setRememberMe(e.target.checked)}
               className="mr-2 h-4 w-4 text-[#C8102E] focus:ring-[#C8102E] border-gray-300 rounded accent-[#C8102E]"
               aria-label="Remember me checkbox"
+              disabled={isLocked}
             />
             <label 
               htmlFor="rememberMe" 
@@ -234,6 +347,7 @@ export default function LoginPage(): React.ReactElement {
               : 'bg-[#003087] text-white hover:bg-[#002060]'
           }`}
           aria-label="Login button"
+          aria-disabled={isLocked ? "true" : "false"}
         >
           Login
         </button>
