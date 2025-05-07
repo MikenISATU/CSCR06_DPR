@@ -165,7 +165,7 @@ export default function LoginPage(): React.ReactElement {
         </button>
       </form>
       <footer className="mt-8 text-sm text-gray-600">
-        All rights reserved by CSC R06 2025
+        All Rights Reserved by CSC R06 2025
       </footer>
     </div>
   )
