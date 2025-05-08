@@ -14,6 +14,7 @@ export default function LoginPage(): React.ReactElement {
   const [isLocked, setIsLocked] = useState<boolean>(false)
   const [lockoutTimestamp, setLockoutTimestamp] = useState<number | null>(null)
   const [remainingTime, setRemainingTime] = useState<number>(0)
+  const [lastAttemptDate, setLastAttemptDate] = useState<string | null>(null)
   const [clickCount, setClickCount] = useState<number>(0)
   const [showQuote, setShowQuote] = useState<boolean>(false)
   const router = useRouter()
@@ -29,25 +30,33 @@ export default function LoginPage(): React.ReactElement {
 
     const rateLimitState = localStorage.getItem('scanflow360_rate_limit')
     if (rateLimitState) {
-      const { attempts, locked, timestamp } = JSON.parse(rateLimitState)
+      const { attempts, locked, timestamp, lastAttemptDate } = JSON.parse(rateLimitState)
       const currentTime = Date.now()
       const lockoutDuration = 5 * 60 * 1000
+      const currentDate = new Date().toDateString()
 
-      if (locked && timestamp) {
-        const elapsedTime = currentTime - timestamp
-        if (elapsedTime < lockoutDuration) {
-          setIsLocked(true)
-          setLoginAttempts(attempts || 0)
-          setLockoutTimestamp(timestamp)
-          setRemainingTime(Math.floor((lockoutDuration - elapsedTime) / 1000))
-        } else {
-          resetRateLimitState()
-        }
+      // Reset attempts if it's a new day
+      if (lastAttemptDate && lastAttemptDate !== currentDate) {
+        resetRateLimitState()
       } else {
-        setLoginAttempts(attempts || 0)
-        setIsLocked(false)
-        setLockoutTimestamp(null)
-        setRemainingTime(0)
+        if (locked && timestamp) {
+          const elapsedTime = currentTime - timestamp
+          if (elapsedTime < lockoutDuration) {
+            setIsLocked(true)
+            setLoginAttempts(attempts || 0)
+            setLockoutTimestamp(timestamp)
+            setRemainingTime(Math.floor((lockoutDuration - elapsedTime) / 1000))
+            setLastAttemptDate(lastAttemptDate || currentDate)
+          } else {
+            resetRateLimitState()
+          }
+        } else {
+          setLoginAttempts(attempts || 0)
+          setIsLocked(false)
+          setLockoutTimestamp(null)
+          setRemainingTime(0)
+          setLastAttemptDate(lastAttemptDate || currentDate)
+        }
       }
     }
   }, [])
@@ -57,8 +66,9 @@ export default function LoginPage(): React.ReactElement {
       attempts: loginAttempts,
       locked: isLocked,
       timestamp: lockoutTimestamp,
+      lastAttemptDate: lastAttemptDate || new Date().toDateString(),
     }))
-  }, [loginAttempts, isLocked, lockoutTimestamp])
+  }, [loginAttempts, isLocked, lockoutTimestamp, lastAttemptDate])
 
   useEffect(() => {
     if (isLocked && lockoutTimestamp) {
@@ -99,7 +109,7 @@ export default function LoginPage(): React.ReactElement {
         setClickCount(0)
       }, 1000)
 
-      if (clickCount + 1 === 30) {
+      if (clickCount + 1 === 60) {
         setShowQuote(true)
         setClickCount(0)
       }
@@ -126,10 +136,12 @@ export default function LoginPage(): React.ReactElement {
     setLoginAttempts(0)
     setLockoutTimestamp(null)
     setRemainingTime(0)
+    setLastAttemptDate(new Date().toDateString())
     localStorage.setItem('scanflow360_rate_limit', JSON.stringify({
       attempts: 0,
       locked: false,
       timestamp: null,
+      lastAttemptDate: new Date().toDateString(),
     }))
   }
 
@@ -138,8 +150,13 @@ export default function LoginPage(): React.ReactElement {
 
     const rateLimitState = localStorage.getItem('scanflow360_rate_limit')
     if (rateLimitState) {
-      const { locked, timestamp } = JSON.parse(rateLimitState)
-      if (locked && timestamp) {
+      const { locked, timestamp, lastAttemptDate } = JSON.parse(rateLimitState)
+      const currentDate = new Date().toDateString()
+      
+      // Reset attempts if it's a new day
+      if (lastAttemptDate && lastAttemptDate !== currentDate) {
+        resetRateLimitState()
+      } else if (locked && timestamp) {
         const elapsedTime = Date.now() - timestamp
         const lockoutDuration = 5 * 60 * 1000
         if (elapsedTime < lockoutDuration) {
@@ -160,6 +177,7 @@ export default function LoginPage(): React.ReactElement {
     if (!sanitizedUsername) {
       alert('Invalid username. Only alphanumeric characters, underscores, and hyphens are allowed.')
       setLoginAttempts(prev => prev + 1)
+      setLastAttemptDate(new Date().toDateString())
       if (loginAttempts + 1 >= 5) {
         setIsLocked(true)
         setLockoutTimestamp(Date.now())
@@ -171,6 +189,7 @@ export default function LoginPage(): React.ReactElement {
     if (!password) {
       alert('Password cannot be empty.')
       setLoginAttempts(prev => prev + 1)
+      setLastAttemptDate(new Date().toDateString())
       if (loginAttempts + 1 >= 5) {
         setIsLocked(true)
         setLockoutTimestamp(Date.now())
@@ -188,6 +207,7 @@ export default function LoginPage(): React.ReactElement {
       if (error) {
         alert('Error fetching user: ' + error.message)
         setLoginAttempts(prev => prev + 1)
+        setLastAttemptDate(new Date().toDateString())
         if (loginAttempts + 1 >= 5) {
           setIsLocked(true)
           setLockoutTimestamp(Date.now())
@@ -199,6 +219,7 @@ export default function LoginPage(): React.ReactElement {
       if (!users || users.length === 0) {
         alert('User not found')
         setLoginAttempts(prev => prev + 1)
+        setLastAttemptDate(new Date().toDateString())
         if (loginAttempts + 1 >= 5) {
           setIsLocked(true)
           setLockoutTimestamp(Date.now())
@@ -210,6 +231,7 @@ export default function LoginPage(): React.ReactElement {
       if (users.length > 1) {
         alert('Multiple users found with this username. Please contact support.')
         setLoginAttempts(prev => prev + 1)
+        setLastAttemptDate(new Date().toDateString())
         if (loginAttempts + 1 >= 5) {
           setIsLocked(true)
           setLockoutTimestamp(Date.now())
@@ -223,6 +245,7 @@ export default function LoginPage(): React.ReactElement {
       if (user.password !== password) {
         alert('Wrong username or password')
         setLoginAttempts(prev => prev + 1)
+        setLastAttemptDate(new Date().toDateString())
         if (loginAttempts + 1 >= 5) {
           setIsLocked(true)
           setLockoutTimestamp(Date.now())
@@ -256,6 +279,7 @@ export default function LoginPage(): React.ReactElement {
     } catch (err) {
       alert('Unexpected error: ' + (err instanceof Error ? err.message : String(err)))
       setLoginAttempts(prev => prev + 1)
+      setLastAttemptDate(new Date().toDateString())
       if (loginAttempts + 1 >= 5) {
         setIsLocked(true)
         setLockoutTimestamp(Date.now())
@@ -394,7 +418,7 @@ export default function LoginPage(): React.ReactElement {
       )}
 
       <footer className="mt-8 text-sm text-gray-600">
-        © 2025 CSC R06. All rights reserved.
+        All Rights Reserved by CSC R06 2025
       </footer>
     </div>
   )
