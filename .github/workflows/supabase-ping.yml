@@ -4,31 +4,48 @@ on:
     - cron: '30 18 * * 1' # Runs every Monday at 6:30 PM UTC
     - cron: '30 18 * * 4' # Runs every Thursday at 6:30 PM UTC
     - cron: '30 18 * * 0' # Runs every Sunday at 6:30 PM UTC
+  workflow_dispatch: # Allows manual triggering for testing
 jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout/repository
+      - name: Checkout repository
         uses: actions/checkout@v3
       - name: Set up Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: '16'
+          node-version: '18' # Upgraded to Node.js 18 for better compatibility
       - name: Install Supabase client
         run: npm install @supabase/supabase-js
       - name: Create ping script
         run: |
           echo "const { createClient } = require('@supabase/supabase-js');
+
+          // Log environment variables (for debugging, without exposing values)
+          console.log('SUPABASE_URL set:', !!process.env.NEXT_PUBLIC_SUPABASE_URL);
+          console.log('SUPABASE_KEY set:', !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+
           const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
-          supabase.from('users2').select('id').limit(1)
-            .then(result => {
-              console.log('Success:', result);
-              process.exit(0);
-            })
-            .catch(error => {
-              console.error('Error:', error);
-              process.exit(1);
-            });" > ping.js
+
+          async function pingWithRetry(attempts = 3, delay = 2000) {
+            for (let i = 0; i < attempts; i++) {
+              try {
+                const { data, error } = await supabase.from('users2').select('id').limit(1);
+                if (error) throw error;
+                console.log('Query successful:', data);
+                process.exit(0);
+              } catch (error) {
+                console.error(\`Attempt \${i + 1} failed: \${error.message}\`);
+                if (i === attempts - 1) {
+                  console.error('All attempts failed:', error);
+                  process.exit(1);
+                }
+                await new Promise(resolve => setTimeout(resolve, delay));
+              }
+            }
+          }
+
+          pingWithRetry();" > ping.js
       - name: Ping Supabase
         env:
           SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
