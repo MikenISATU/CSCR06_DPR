@@ -8,7 +8,7 @@ jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
+      - name: Checkout/repository
         uses: actions/checkout@v3
       - name: Set up Node.js
         uses: actions/setup-node@v3
@@ -16,9 +16,21 @@ jobs:
           node-version: '16'
       - name: Install Supabase client
         run: npm install @supabase/supabase-js
+      - name: Create ping script
+        run: |
+          echo "const { createClient } = require('@supabase/supabase-js');
+          const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+          supabase.from('users2').select('id').limit(1)
+            .then(result => {
+              console.log('Success:', result);
+              process.exit(0);
+            })
+            .catch(error => {
+              console.error('Error:', error);
+              process.exit(1);
+            });" > ping.js
       - name: Ping Supabase
         env:
           SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-        run: |
-          node -e "const { createClient } = require('@supabase/supabase-js'); const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY); supabase.from('users2').select('id').limit(1).then(console.log).catch(console.error);"
+        run: node ping.js
