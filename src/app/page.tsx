@@ -19,6 +19,29 @@ export default function LoginPage(): React.ReactElement {
   const [showQuote, setShowQuote] = useState<boolean>(false)
   const router = useRouter()
 
+  // Add a new useEffect to ping the users2 table on component mount
+  useEffect(() => {
+    const pingSupabase = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('users2')
+          .select('id')
+          .limit(1)
+
+        if (error) {
+          console.error('Error pinging Supabase:', error.message)
+        } else {
+          console.log('Successfully pinged Supabase:', data)
+        }
+      } catch (err) {
+        console.error('Unexpected error during Supabase ping:', err instanceof Error ? err.message : String(err))
+      }
+    }
+
+    pingSupabase()
+  }, []) // Empty dependency array ensures this runs only once on mount
+
+  // Rest of your existing useEffect hooks remain unchanged
   useEffect(() => {
     const savedCredentials = localStorage.getItem('scanflow360_credentials')
     if (savedCredentials) {
@@ -35,7 +58,6 @@ export default function LoginPage(): React.ReactElement {
       const lockoutDuration = 5 * 60 * 1000
       const currentDate = new Date().toDateString()
 
-      // Reset attempts if it's a new day
       if (lastAttemptDate && lastAttemptDate !== currentDate) {
         resetRateLimitState()
       } else {
@@ -93,7 +115,7 @@ export default function LoginPage(): React.ReactElement {
   useEffect(() => {
     let clickTimeout: NodeJS.Timeout | null = null
     let lastEventTime: number = 0
-    const debounceTime = 50 // Debounce time in milliseconds to prevent double counting
+    const debounceTime = 50
 
     const handleClick = (event: Event) => {
       const currentTime = Date.now()
@@ -153,7 +175,6 @@ export default function LoginPage(): React.ReactElement {
       const { locked, timestamp, lastAttemptDate } = JSON.parse(rateLimitState)
       const currentDate = new Date().toDateString()
       
-      // Reset attempts if it's a new day
       if (lastAttemptDate && lastAttemptDate !== currentDate) {
         resetRateLimitState()
       } else if (locked && timestamp) {
