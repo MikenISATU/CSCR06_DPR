@@ -38,6 +38,10 @@ export default function AdminPage() {
   const [newPassword, setNewPassword] = useState<string>('')
   const [adminNewUsername, setAdminNewUsername] = useState<string>('')
   const [adminNewPassword, setAdminNewPassword] = useState<string>('')
+  const [showMonthlySummary, setShowMonthlySummary] = useState(false)
+  const [summaryMonth, setSummaryMonth] = useState<string>('')
+  const [summaryYear, setSummaryYear] = useState<string>('')
+  const [summaryRole, setSummaryRole] = useState<string>('MSD')
 
   useEffect(() => {
     const stored = localStorage.getItem('scanflow360_user')
@@ -484,6 +488,124 @@ export default function AdminPage() {
     XLSX.writeFile(workbook, monthName + "_" + year + "_Report.xlsx")
   }
 
+  function generateRoleReport(periodType: 'monthly' | 'yearly', role: string) {
+    if (periodType === 'monthly' && (!summaryMonth || !summaryYear)) {
+      alert('Please select both a month and a year for the monthly report.')
+      return
+    }
+
+    const year = periodType === 'monthly' ? parseInt(summaryYear) : new Date().getFullYear()
+    const month = periodType === 'monthly' ? parseInt(summaryMonth) : null
+    const monthName = periodType === 'monthly' ? new Date(`${year}-${summaryMonth}-01`).toLocaleString('default', { month: 'long' }) : ''
+    const reportTitle = periodType === 'monthly' ? `For the month of ${monthName} ${year}` : `For the Year ${year}`
+    const periodName = periodType === 'monthly' ? `${monthName}_${year}_${role}` : `Year_${year}_${role}`
+
+    const filteredReports = reports.filter(r => {
+      const reportDate = new Date(r.created_at)
+      const matchesRole = r.role.toUpperCase() === role.toUpperCase()
+      if (periodType === 'monthly') {
+        return matchesRole && reportDate.getFullYear() === year && (reportDate.getMonth() + 1) === month
+      } else {
+        return matchesRole && reportDate.getFullYear() === year
+      }
+    })
+
+    if (filteredReports.length === 0) {
+      alert(`No reports found for ${role} in ${reportTitle}.`)
+      return
+    }
+
+    const groupedReports: { [key: string]: { periods: { period: string; pages: number }[] } } = {}
+    filteredReports.forEach((report) => {
+      const key = report.type_of_record
+      const period = report.period_covered
+      if (!groupedReports[key]) {
+        groupedReports[key] = { periods: [] }
+      }
+      groupedReports[key].periods.push({ period, pages: report.no_of_pages })
+    })
+
+    const worksheet: XLSX.WorkSheet = XLSX.utils.aoa_to_sheet([])
+    XLSX.utils.sheet_add_aoa(worksheet, [[`Civil Service Commission Regional Office VI - ${role.toUpperCase()}`]], { origin: "B1" })
+    XLSX.utils.sheet_add_aoa(worksheet, [["DIGITIZATION OF RECORDS"]], { origin: "B2" })
+    XLSX.utils.sheet_add_aoa(worksheet, [[reportTitle]], { origin: "B3" })
+    XLSX.utils.sheet_add_aoa(worksheet, [["Target: 100% of Identified Records"]], { origin: "B4" })
+
+    worksheet['!merges'] = [
+      { s: { r: 0, c: 1 }, e: { r: 0, c: 3 } },
+      { s: { r: 1, c: 1 }, e: { r: 1, c: 3 } },
+      { s: { r: 2, c: 1 }, e: { r: 2, c: 3 } },
+      { s: { r: 3, c: 1 }, e: { r: 3, c: 3 } },
+    ]
+
+    applyStyles(worksheet, 0, 3, 4, true, true)
+
+    let currentRow: number = 6
+    const tableHeader: string[] = ["No.", "Type of Record", "Period Covered", "No. of Pages"]
+    XLSX.utils.sheet_add_aoa(worksheet, [tableHeader], { origin: "A" + currentRow })
+    applyStyles(worksheet, currentRow - 1, currentRow - 1, tableHeader.length, true)
+
+    currentRow++
+
+    let reportIndex: number = 1
+    let totalPages: number = 0
+
+    Object.entries(groupedReports).forEach(([type, { periods }]) => {
+      if (periods.length > 1) {
+        const mainRow = [reportIndex++, type, "", ""]
+        XLSX.utils.sheet_add_aoa(worksheet, [mainRow], { origin: "A" + currentRow })
+        currentRow++
+
+        periods.forEach((p, idx) => {
+          const pages = idx === 0 ? p.pages : ""
+          totalPages += idx === 0 ? p.pages : 0
+          const subRow = ["", "", p.period, pages]
+          XLSX.utils.sheet_add_aoa(worksheet, [subRow], { origin: "A" + currentRow })
+          currentRow++
+        })
+      } else {
+        const singleRow = [reportIndex++, type, periods[0].period, periods[0].pages]
+        totalPages += periods[0].pages
+        XLSX.utils.sheet_add_aoa(worksheet, [singleRow], { origin: "A" + currentRow })
+        currentRow++
+      }
+    })
+
+    applyStyles(worksheet, 6, currentRow - 1, tableHeader.length)
+
+    const totalRow = ["", "TOTAL NO. OF PAGES", "", totalPages]
+    XLSX.utils.sheet_add_aoa(worksheet, [totalRow], { origin: "A" + currentRow })
+    applyStyles(worksheet, currentRow - 1, currentRow - 1, tableHeader.length, true)
+    currentRow += 2
+
+    XLSX.utils.sheet_add_aoa(worksheet, [["Consolidated by:"]], { origin: "A" + currentRow })
+    currentRow++
+    XLSX.utils.sheet_add_aoa(worksheet, [[""]], { origin: "A" + currentRow })
+    currentRow++
+    XLSX.utils.sheet_add_aoa(worksheet, [["MARIA THERESA J. AGUIRRE"]], { origin: "A" + currentRow })
+    currentRow++
+    XLSX.utils.sheet_add_aoa(worksheet, [["Chief HRS, PALD"]], { origin: "A" + currentRow })
+    currentRow++
+    XLSX.utils.sheet_add_aoa(worksheet, [["Digitization Project Head"]], { origin: "A" + currentRow })
+    currentRow += 2
+    XLSX.utils.sheet_add_aoa(worksheet, [["Noted by:"]], { origin: "A" + currentRow })
+    currentRow++
+    XLSX.utils.sheet_add_aoa(worksheet, [["ATTY. ERNA T. ELIZAN"]], { origin: "A" + currentRow })
+    currentRow++
+    XLSX.utils.sheet_add_aoa(worksheet, [["Acting Director III"]], { origin: "A" + currentRow })
+
+    worksheet['!cols'] = [
+      { wch: 5 },
+      { wch: 50 },
+      { wch: 30 },
+      { wch: 15 },
+    ]
+
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, worksheet, `${periodName}_Report`)
+    XLSX.writeFile(workbook, `${periodName}_Report.xlsx`)
+  }
+
   const msdReports = reports.filter(r => r.role.toUpperCase() === 'MSD')
   const esdReports = reports.filter(r => r.role.toUpperCase() === 'ESD')
   const lsdReports = reports.filter(r => r.role.toUpperCase() === 'LSD')
@@ -529,6 +651,63 @@ export default function AdminPage() {
         title: {
           display: true,
           text: 'Department',
+        },
+      },
+    },
+  }
+
+  const monthlyChartData = () => {
+    const filteredReports = reports.filter(r => {
+      const reportDate = new Date(r.created_at)
+      return (
+        r.role.toUpperCase() === summaryRole.toUpperCase() &&
+        reportDate.getFullYear() === parseInt(summaryYear) &&
+        (reportDate.getMonth() + 1) === parseInt(summaryMonth)
+      )
+    })
+
+    return {
+      labels: [...new Set(filteredReports.map(r => r.type_of_record))],
+      datasets: [
+        {
+          label: `Total Pages (${new Date(`${summaryYear}-${summaryMonth}-01`).toLocaleString('default', { month: 'long' })} ${summaryYear})`,
+          data: [...new Set(filteredReports.map(r => r.type_of_record))].map(type =>
+            filteredReports
+              .filter(r => r.type_of_record === type)
+              .reduce((sum, r) => sum + r.no_of_pages, 0)
+          ),
+          backgroundColor: '#003087',
+          borderColor: '#002060',
+          borderWidth: 1,
+        },
+      ],
+    }
+  }
+
+  const monthlyChartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'top' as const,
+      },
+      title: {
+        display: true,
+        text: `Total Pages per Record Type (${new Date(`${summaryYear}-${summaryMonth}-01`).toLocaleString('default', { month: 'long' })} ${summaryYear})`,
+      },
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        title: {
+          display: true,
+          text: 'Number of Pages',
+        },
+      },
+      x: {
+        title: {
+          display: true,
+          text: 'Type of Record',
         },
       },
     },
@@ -689,7 +868,7 @@ export default function AdminPage() {
                   <th className="p-1 sm:p-2 text-left w-[40px] sm:w-[50px]">No.</th>
                   <th className="p-1 sm:p-2 text-left w-[80px] sm:w-[100px]">Role</th>
                   <th className="p-1 sm:p-2 text-left w-[150px] sm:w-[200px]">Category</th>
-                  <th className="p-1 sm:p-2 text-left w-[100px] sm:w-[100px]">Actions</th>
+                  <th className="p-1 sm:p-2 text-left w-[100px] sm:w-[100px]"></th>
                 </tr>
               </thead>
               <tbody>
@@ -752,6 +931,71 @@ export default function AdminPage() {
         </div>
 
         <div className="mb-6 sm:mb-8">
+          <h2 className="text-base sm:text-lg md:text-xl font-semibold text-[#003087] mb-3 sm:mb-4 font-bold">
+            Monthly Summary
+          </h2>
+          <div className="flex flex-col space-y-3 sm:space-y-4">
+            <div className="flex flex-col sm:flex-row items-center space-y-3 sm:space-y-0 sm:space-x-4">
+              <select
+                value={summaryMonth}
+                onChange={(e) => setSummaryMonth(e.target.value)}
+                className="border border-gray-300 rounded p-1 sm:p-2 w-full sm:w-auto text-xs sm:text-sm text-[#003087]"
+              >
+                <option value="" disabled className="text-gray-500">Select Month</option>
+                {months.map((month) => (
+                  <option key={month.value} value={month.value} className="text-[#003087]">
+                    {month.label}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={summaryYear}
+                onChange={(e) => setSummaryYear(e.target.value)}
+                className="border border-gray-300 rounded p-1 sm:p-2 w-full sm:w-auto text-xs sm:text-sm text-[#003087]"
+              >
+                <option value="" disabled className="text-gray-500">Select Year</option>
+                {years.map((year) => (
+                  <option key={year} value={year} className="text-[#003087]">
+                    {year}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={summaryRole}
+                onChange={(e) => setSummaryRole(e.target.value)}
+                className="border border-gray-300 rounded p-1 sm:p-2 w-full sm:w-auto text-xs sm:text-sm text-[#003087]"
+              >
+                {roles.map((role) => (
+                  <option key={role} value={role} className="text-[#003087]">
+                    {role}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={() => setShowMonthlySummary(true)}
+                className="py-1 px-2 sm:py-2 sm:px-4 bg-[#003087] text-white rounded hover:bg-[#002060] transition-colors font-medium w-full sm:w-auto text-xs sm:text-sm"
+              >
+                View Summary
+              </button>
+            </div>
+            <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4">
+              <button
+                onClick={() => generateRoleReport('monthly', summaryRole)}
+                className="py-1 px-2 sm:py-2 sm:px-4 bg-[#C1272D] text-white rounded hover:bg-[#a12025] transition-colors font-medium w-full sm:w-auto text-xs sm:text-sm"
+              >
+                Download Monthly Report
+              </button>
+              <button
+                onClick={() => generateRoleReport('yearly', summaryRole)}
+                className="py-1 px-2 sm:py-2 sm:px-4 bg-[#C1272D] text-white rounded hover:bg-[#a12025] transition-colors font-medium w-full sm:w-auto text-xs sm:text-sm"
+              >
+                Download Yearly Report
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="mb-6 sm:mb-8">
           <h2 className="text-base sm:text-lg md:text-xl font-semibold text-[#003087] mb-3 sm:mb-4 font-['Poppins']">
             Yearly Summary
           </h2>
@@ -809,7 +1053,7 @@ export default function AdminPage() {
                 onClick={downloadMonthlyReport}
                 className="py-1 px-2 sm:py-2 sm:px-4 bg-[#003087] text-white rounded hover:bg-[#002060] transition-colors font-medium w-full sm:w-auto text-xs sm:text-sm"
               >
-                Download
+                Download Monthly Report
               </button>
             </div>
           </div>
@@ -899,9 +1143,68 @@ export default function AdminPage() {
             </div>
           </div>
         )}
+
+        {showMonthlySummary && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-2 sm:p-4">
+            <div className="bg-white p-3 sm:p-4 md:p-6 rounded-lg shadow-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+              <h2 className="text-base sm:text-lg md:text-xl font-bold text-[#003087] mb-3 sm:mb-4 font-['Poppins']">
+                Summary for {new Date(`${summaryYear}-${summaryMonth}-01`).toLocaleString('default', { month: 'long' })} {summaryYear} ({summaryRole})
+              </h2>
+              <div className="mb-4 sm:mb-6 h-48 sm:h-64 md:h-80">
+                <Bar data={monthlyChartData()} options={monthlyChartOptions} />
+              </div>
+              <div className="overflow-x-auto max-h-60">
+                <table className="w-full border-collapse table-auto text-xs sm:text-sm">
+                  <thead>
+                    <tr className="bg-[#003087] text-white sticky top-0">
+                      <th className="p-1 sm:p-2 text-left w-[40px] sm:w-[50px]">No.</th>
+                      <th className="p-1 sm:p-2 text-left w-[150px] sm:w-[200px]">Type of Record</th>
+                      <th className="p-1 sm:p-2 text-left w-[120px] sm:w-[150px]">Period Covered</th>
+                      <th className="p-1 sm:p-2 text-left w-[80px] sm:w-[100px]">No. of Pages</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {reports
+                      .filter(r => 
+                        r.role.toUpperCase() === summaryRole.toUpperCase() &&
+                        new Date(r.created_at).getFullYear() === parseInt(summaryYear) &&
+                        (new Date(r.created_at).getMonth() + 1) === parseInt(summaryMonth)
+                      )
+                      .map((r, index) => (
+                        <tr key={r.id} className="border-b hover:bg-[#F5F6F5]">
+                          <td className="p-1 sm:p-2 truncate text-[#003087]" title={String(index + 1)}>{index + 1}</td>
+                          <td className="p-1 sm:p-2 truncate text-[#003087]" title={r.type_of_record}>{r.type_of_record}</td>
+                          <td className="p-1 sm:p-2 truncate text-[#003087]" title={r.period_covered}>{r.period_covered}</td>
+                          <td className="p-1 sm:p-2 truncate text-[#003087]" title={String(r.no_of_pages)}>{r.no_of_pages}</td>
+                        </tr>
+                      ))}
+                    <tr className="font-bold">
+                      <td colSpan={3} className="p-1 sm:p-2 text-right text-[#003087]">Total No. of Pages</td>
+                      <td className="p-1 sm:p-2 text-[#003087]">
+                        {reports
+                          .filter(r => 
+                            r.role.toUpperCase() === summaryRole.toUpperCase() &&
+                            new Date(r.created_at).getFullYear() === parseInt(summaryYear) &&
+                            (new Date(r.created_at).getMonth() + 1) === parseInt(summaryMonth)
+                          )
+                          .reduce((sum, r) => sum + r.no_of_pages, 0)}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <button
+                onClick={() => setShowMonthlySummary(false)}
+                className="mt-3 sm:mt-4 w-full py-1 sm:py-2 bg-[#003087] text-white rounded hover:bg-[#002060] transition-colors font-medium text-xs sm:text-sm"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        )}
+
       </div>
 
-      {/* User Management Slider */}
       <div
         className={`fixed top-0 right-0 h-full w-64 sm:w-80 bg-white shadow-lg transform transition-transform duration-300 ease-in-out z-50 ${
           activeSlider === 'users' ? 'translate-x-0' : 'translate-x-full'
@@ -967,7 +1270,6 @@ export default function AdminPage() {
         </div>
       </div>
 
-      {/* Admin Management Slider */}
       <div
         className={`fixed top-0 right-0 h-full w-64 sm:w-80 bg-white shadow-lg transform transition-transform duration-300 ease-in-out z-50 ${
           activeSlider === 'admin' ? 'translate-x-0' : 'translate-x-full'
@@ -1010,7 +1312,6 @@ export default function AdminPage() {
         </div>
       </div>
 
-      {/* Overlay for sliders on mobile */}
       {activeSlider && (
         <div
           className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden"
