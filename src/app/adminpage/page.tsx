@@ -931,8 +931,8 @@ export default function AdminPage() {
         </div>
 
         <div className="mb-6 sm:mb-8">
-          <h2 className="text-base sm:text-lg md:text-xl font-semibold text-[#003087] mb-3 sm:mb-4 font-bold">
-            Monthly Summary
+            <h2 className="text-base sm:text-lg md:text-xl font-semibold text-[#003087] mb-3 sm:mb-4 font-['Poppins']">
+            Report per Office
           </h2>
           <div className="flex flex-col space-y-3 sm:space-y-4">
             <div className="flex flex-col sm:flex-row items-center space-y-3 sm:space-y-0 sm:space-x-4">
@@ -997,7 +997,7 @@ export default function AdminPage() {
 
         <div className="mb-6 sm:mb-8">
           <h2 className="text-base sm:text-lg md:text-xl font-semibold text-[#003087] mb-3 sm:mb-4 font-['Poppins']">
-            Yearly Summary
+            Regional Office Consolidated Report
           </h2>
           <div className="flex flex-col space-y-3 sm:space-y-4">
             <div className="flex flex-col sm:flex-row sm:space-x-4 space-y-3 sm:space-y-0">
@@ -1005,7 +1005,7 @@ export default function AdminPage() {
                 onClick={fetchYearlyReports}
                 className="py-1 px-2 sm:py-2 sm:px-4 bg-[#003087] text-white rounded hover:bg-[#002060] transition-colors font-medium text-xs sm:text-sm"
               >
-                View Summary
+                Annual Report
               </button>
               <button
                 onClick={isReportGenerated ? downloadYearlyReport : fetchYearlyReports}
