@@ -1,87 +1,84 @@
-"use client"
+"use client";
 
-import React, { useState, FormEvent, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import Image from 'next/image' 
-import { supabase } from './supbase'
+import React, { useState, FormEvent, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import Image from 'next/image';
+import Link from 'next/link';
+import { supabase } from './supbase';
 
 export default function LoginPage(): React.ReactElement {
-  const [username, setUsername] = useState<string>('')
-  const [password, setPassword] = useState<string>('')
-  const [rememberMe, setRememberMe] = useState<boolean>(false)
-  const [showPassword, setShowPassword] = useState<boolean>(false)
-  const [loginAttempts, setLoginAttempts] = useState<number>(0)
-  const [isLocked, setIsLocked] = useState<boolean>(false)
-  const [lockoutTimestamp, setLockoutTimestamp] = useState<number | null>(null)
-  const [remainingTime, setRemainingTime] = useState<number>(0)
-  const [lastAttemptDate, setLastAttemptDate] = useState<string | null>(null)
-  const [clickCount, setClickCount] = useState<number>(0)
-  const [showQuote, setShowQuote] = useState<boolean>(false)
-  const router = useRouter()
+  const [username, setUsername] = useState<string>('');
+  const [password, setPassword] = useState<string>('');
+  const [rememberMe, setRememberMe] = useState<boolean>(false);
+  const [showPassword, setShowPassword] = useState<boolean>(false);
+  const [loginAttempts, setLoginAttempts] = useState<number>(0);
+  const [isLocked, setIsLocked] = useState<boolean>(false);
+  const [lockoutTimestamp, setLockoutTimestamp] = useState<number | null>(null);
+  const [remainingTime, setRemainingTime] = useState<number>(0);
+  const [lastAttemptDate, setLastAttemptDate] = useState<string | null>(null);
+  const [clickCount, setClickCount] = useState<number>(0);
+  const [showQuote, setShowQuote] = useState<boolean>(false);
+  const router = useRouter();
 
-  // Add a new useEffect to ping the users2 table on component mount
   useEffect(() => {
     const pingSupabase = async () => {
       try {
         const { data, error } = await supabase
           .from('users2')
           .select('id')
-          .limit(1)
-
+          .limit(1);
         if (error) {
-          console.error('Error pinging Supabase:', error.message)
+          console.error('Error pinging Supabase:', error.message);
         } else {
-          console.log('Successfully pinged Supabase:', data)
+          console.log('Successfully pinged Supabase:', data);
         }
       } catch (err) {
-        console.error('Unexpected error during Supabase ping:', err instanceof Error ? err.message : String(err))
+        console.error('Unexpected error during Supabase ping:', err instanceof Error ? err.message : String(err));
       }
-    }
+    };
+    pingSupabase();
+  }, []);
 
-    pingSupabase()
-  }, []) // Empty dependency array ensures this runs only once on mount
-
-  // Rest of your existing useEffect hooks remain unchanged
   useEffect(() => {
-    const savedCredentials = localStorage.getItem('scanflow360_credentials')
+    const savedCredentials = localStorage.getItem('scanflow360_credentials');
     if (savedCredentials) {
-      const { username: savedUsername, password: savedPassword } = JSON.parse(savedCredentials)
-      setUsername(savedUsername || '')
-      setPassword(savedPassword || '')
-      setRememberMe(true)
+      const { username: savedUsername, password: savedPassword } = JSON.parse(savedCredentials);
+      setUsername(savedUsername || '');
+      setPassword(savedPassword || '');
+      setRememberMe(true);
     }
 
-    const rateLimitState = localStorage.getItem('scanflow360_rate_limit')
+    const rateLimitState = localStorage.getItem('scanflow360_rate_limit');
     if (rateLimitState) {
-      const { attempts, locked, timestamp, lastAttemptDate } = JSON.parse(rateLimitState)
-      const currentTime = Date.now()
-      const lockoutDuration = 5 * 60 * 1000
-      const currentDate = new Date().toDateString()
+      const { attempts, locked, timestamp, lastAttemptDate } = JSON.parse(rateLimitState);
+      const currentTime = Date.now();
+      const lockoutDuration = 5 * 60 * 1000;
+      const currentDate = new Date().toDateString();
 
       if (lastAttemptDate && lastAttemptDate !== currentDate) {
-        resetRateLimitState()
+        resetRateLimit();
       } else {
         if (locked && timestamp) {
-          const elapsedTime = currentTime - timestamp
+          const elapsedTime = currentTime - timestamp;
           if (elapsedTime < lockoutDuration) {
-            setIsLocked(true)
-            setLoginAttempts(attempts || 0)
-            setLockoutTimestamp(timestamp)
-            setRemainingTime(Math.floor((lockoutDuration - elapsedTime) / 1000))
-            setLastAttemptDate(lastAttemptDate || currentDate)
+            setIsLocked(true);
+            setLoginAttempts(attempts || 0);
+            setLockoutTimestamp(timestamp);
+            setRemainingTime(Math.floor((lockoutDuration - elapsedTime) / 1000));
+            setLastAttemptDate(lastAttemptDate || currentDate);
           } else {
-            resetRateLimitState()
+            resetRateLimit();
           }
         } else {
-          setLoginAttempts(attempts || 0)
-          setIsLocked(false)
-          setLockoutTimestamp(null)
-          setRemainingTime(0)
-          setLastAttemptDate(lastAttemptDate || currentDate)
+          setLoginAttempts(attempts || 0);
+          setIsLocked(false);
+          setLockoutTimestamp(null);
+          setRemainingTime(0);
+          setLastAttemptDate(lastAttemptDate || currentDate);
         }
       }
     }
-  }, [])
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('scanflow360_rate_limit', JSON.stringify({
@@ -89,222 +86,220 @@ export default function LoginPage(): React.ReactElement {
       locked: isLocked,
       timestamp: lockoutTimestamp,
       lastAttemptDate: lastAttemptDate || new Date().toDateString(),
-    }))
-  }, [loginAttempts, isLocked, lockoutTimestamp, lastAttemptDate])
+    }));
+  }, [loginAttempts, isLocked, lockoutTimestamp, lastAttemptDate]);
 
   useEffect(() => {
     if (isLocked && lockoutTimestamp) {
-      const lockoutDuration = 5 * 60 * 1000
+      const lockoutDuration = 5 * 60 * 1000;
       const updateTimer = () => {
-        const currentTime = Date.now()
-        const elapsedTime = currentTime - lockoutTimestamp
-        const remaining = Math.max(0, Math.floor((lockoutDuration - elapsedTime) / 1000))
-        setRemainingTime(remaining)
-
+        const currentTime = Date.now();
+        const elapsedTime = currentTime - lockoutTimestamp;
+        const remaining = Math.max(0, Math.floor((lockoutDuration - elapsedTime) / 1000));
+        setRemainingTime(remaining);
         if (remaining <= 0) {
-          resetRateLimitState()
+          resetRateLimit();
         }
-      }
-
-      updateTimer()
-      const interval = setInterval(updateTimer, 1000)
-      return () => clearInterval(interval)
+      };
+      updateTimer();
+      const interval = setInterval(updateTimer, 1000);
+      return () => clearInterval(interval);
     }
-  }, [isLocked, lockoutTimestamp])
+  }, [isLocked, lockoutTimestamp]);
 
   useEffect(() => {
-    let clickTimeout: NodeJS.Timeout | null = null
-    let lastEventTime: number = 0
-    const debounceTime = 50
+    let clickTimeout: NodeJS.Timeout | null = null;
+    let lastEventTime: number = 0;
+    const debounceTime = 50;
 
     const handleClick = (event: Event) => {
-      const currentTime = Date.now()
+      const currentTime = Date.now();
       if (currentTime - lastEventTime < debounceTime) {
-        return
+        return;
       }
-      lastEventTime = currentTime
+      lastEventTime = currentTime;
 
-      setClickCount(prev => prev + 1)
-      if (clickTimeout) clearTimeout(clickTimeout)
+      setClickCount(prev => prev + 1);
+      if (clickTimeout) clearTimeout(clickTimeout);
 
       clickTimeout = setTimeout(() => {
-        setClickCount(0)
-      }, 1000)
+        setClickCount(0);
+      }, 1000);
 
       if (clickCount + 1 === 60) {
-        setShowQuote(true)
-        setClickCount(0)
+        setShowQuote(true);
+        setClickCount(0);
       }
-    }
+    };
 
-    window.addEventListener('click', handleClick)
-    window.addEventListener('touchstart', handleClick)
+    window.addEventListener('click', handleClick);
+    window.addEventListener('touchstart', handleClick);
 
     return () => {
-      window.removeEventListener('click', handleClick)
-      window.removeEventListener('touchstart', handleClick)
-      if (clickTimeout) clearTimeout(clickTimeout)
-    }
-  }, [clickCount])
+      window.removeEventListener('click', handleClick);
+      window.removeEventListener('touchstart', handleClick);
+      if (clickTimeout) clearTimeout(clickTimeout);
+    };
+  }, [clickCount]);
 
   const formatTime = (seconds: number): string => {
-    const minutes = Math.floor(seconds / 60)
-    const secs = seconds % 60
-    return `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
-  }
+    const minutes = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  };
 
-  const resetRateLimitState = () => {
-    setIsLocked(false)
-    setLoginAttempts(0)
-    setLockoutTimestamp(null)
-    setRemainingTime(0)
-    setLastAttemptDate(new Date().toDateString())
+  const resetRateLimit = () => {
+    setIsLocked(false);
+    setLoginAttempts(0);
+    setLockoutTimestamp(null);
+    setRemainingTime(0);
+    setLastAttemptDate(new Date().toDateString());
     localStorage.setItem('scanflow360_rate_limit', JSON.stringify({
       attempts: 0,
       locked: false,
       timestamp: null,
       lastAttemptDate: new Date().toDateString(),
-    }))
-  }
+    }));
+  };
 
   async function handleLogin(e: FormEvent<HTMLFormElement>): Promise<void> {
-    e.preventDefault()
+    e.preventDefault();
 
-    const rateLimitState = localStorage.getItem('scanflow360_rate_limit')
+    const rateLimitState = localStorage.getItem('scanflow360_rate_limit');
     if (rateLimitState) {
-      const { locked, timestamp, lastAttemptDate } = JSON.parse(rateLimitState)
-      const currentDate = new Date().toDateString()
-      
+      const { locked, timestamp, lastAttemptDate } = JSON.parse(rateLimitState);
+      const currentDate = new Date().toDateString();
+
       if (lastAttemptDate && lastAttemptDate !== currentDate) {
-        resetRateLimitState()
+        resetRateLimit();
       } else if (locked && timestamp) {
-        const elapsedTime = Date.now() - timestamp
-        const lockoutDuration = 5 * 60 * 1000
+        const elapsedTime = Date.now() - timestamp;
+        const lockoutDuration = 5 * 60 * 1000;
         if (elapsedTime < lockoutDuration) {
-          alert(`Too many failed attempts. Please wait ${formatTime(Math.floor((lockoutDuration - elapsedTime) / 1000))} before trying again.`)
-          return
+          alert(`Too many failed attempts. Please wait ${formatTime(Math.floor((lockoutDuration - elapsedTime) / 1000))} before trying again.`);
+          return;
         } else {
-          resetRateLimitState()
+          resetRateLimit();
         }
       }
     }
 
     if (isLocked) {
-      alert(`Too many failed attempts. Please wait ${formatTime(remainingTime)} before trying again.`)
-      return
+      alert(`Too many failed attempts. Please wait ${formatTime(remainingTime)} before trying again.`);
+      return;
     }
 
-    const sanitizedUsername = username.trim().replace(/[^a-zA-Z0-9_-]/g, '')
+    const sanitizedUsername = username.trim().replace(/[^a-zA-Z0-9_-]/g, '');
     if (!sanitizedUsername) {
-      alert('Invalid username. Only alphanumeric characters, underscores, and hyphens are allowed.')
-      setLoginAttempts(prev => prev + 1)
-      setLastAttemptDate(new Date().toDateString())
+      alert('Invalid username. Only alphanumeric characters, underscores, and hyphens are allowed.');
+      setLoginAttempts(prev => prev + 1);
+      setLastAttemptDate(new Date().toDateString());
       if (loginAttempts + 1 >= 5) {
-        setIsLocked(true)
-        setLockoutTimestamp(Date.now())
-        setRemainingTime(5 * 60)
+        setIsLocked(true);
+        setLockoutTimestamp(Date.now());
+        setRemainingTime(5 * 60);
       }
-      return
+      return;
     }
 
     if (!password) {
-      alert('Password cannot be empty.')
-      setLoginAttempts(prev => prev + 1)
-      setLastAttemptDate(new Date().toDateString())
+      alert('Password cannot be empty.');
+      setLoginAttempts(prev => prev + 1);
+      setLastAttemptDate(new Date().toDateString());
       if (loginAttempts + 1 >= 5) {
-        setIsLocked(true)
-        setLockoutTimestamp(Date.now())
-        setRemainingTime(5 * 60)
+        setIsLocked(true);
+        setLockoutTimestamp(Date.now());
+        setRemainingTime(5 * 60);
       }
-      return
+      return;
     }
 
     try {
       const { data: users, error } = await supabase
         .from('users2')
         .select('id, username, password, role')
-        .eq('username', sanitizedUsername)
+        .eq('username', sanitizedUsername);
 
       if (error) {
-        alert('Error fetching user: ' + error.message)
-        setLoginAttempts(prev => prev + 1)
-        setLastAttemptDate(new Date().toDateString())
+        alert('Error fetching user: ' + error.message);
+        setLoginAttempts(prev => prev + 1);
+        setLastAttemptDate(new Date().toDateString());
         if (loginAttempts + 1 >= 5) {
-          setIsLocked(true)
-          setLockoutTimestamp(Date.now())
-          setRemainingTime(5 * 60)
+          setIsLocked(true);
+          setLockoutTimestamp(Date.now());
+          setRemainingTime(5 * 60);
         }
-        return
+        return;
       }
 
       if (!users || users.length === 0) {
-        alert('User not found')
-        setLoginAttempts(prev => prev + 1)
-        setLastAttemptDate(new Date().toDateString())
+        alert('User not found');
+        setLoginAttempts(prev => prev + 1);
+        setLastAttemptDate(new Date().toDateString());
         if (loginAttempts + 1 >= 5) {
-          setIsLocked(true)
-          setLockoutTimestamp(Date.now())
-          setRemainingTime(5 * 60)
+          setIsLocked(true);
+          setLockoutTimestamp(Date.now());
+          setRemainingTime(5 * 60);
         }
-        return
+        return;
       }
 
       if (users.length > 1) {
-        alert('Multiple users found with this username. Please contact support.')
-        setLoginAttempts(prev => prev + 1)
-        setLastAttemptDate(new Date().toDateString())
+        alert('Multiple users found with this username. Please contact support.');
+        setLoginAttempts(prev => prev + 1);
+        setLastAttemptDate(new Date().toDateString());
         if (loginAttempts + 1 >= 5) {
-          setIsLocked(true)
-          setLockoutTimestamp(Date.now())
-          setRemainingTime(5 * 60)
+          setIsLocked(true);
+          setLockoutTimestamp(Date.now());
+          setRemainingTime(5 * 60);
         }
-        return
+        return;
       }
 
-      const user = users[0]
+      const user = users[0];
 
       if (user.password !== password) {
-        alert('Wrong username or password')
-        setLoginAttempts(prev => prev + 1)
-        setLastAttemptDate(new Date().toDateString())
+        alert('Wrong username or password');
+        setLoginAttempts(prev => prev + 1);
+        setLastAttemptDate(new Date().toDateString());
         if (loginAttempts + 1 >= 5) {
-          setIsLocked(true)
-          setLockoutTimestamp(Date.now())
-          setRemainingTime(5 * 60)
+          setIsLocked(true);
+          setLockoutTimestamp(Date.now());
+          setRemainingTime(5 * 60);
         }
-        return
+        return;
       }
 
-      resetRateLimitState()
+      resetRateLimit();
 
       localStorage.setItem('scanflow360_user', JSON.stringify({
         id: user.id,
         username: user.username,
         role: user.role,
-      }))
+      }));
 
       if (rememberMe) {
         localStorage.setItem('scanflow360_credentials', JSON.stringify({
           username: sanitizedUsername,
           password: password,
-        }))
+        }));
       } else {
-        localStorage.removeItem('scanflow360_credentials')
+        localStorage.removeItem('scanflow360_credentials');
       }
 
       if (user.role.toUpperCase() === 'ADMIN') {
-        router.push('/adminpage')
+        router.push('/adminpage');
       } else {
-        router.push('/inputpage')
+        router.push('/inputpage');
       }
     } catch (err) {
-      alert('Unexpected error: ' + (err instanceof Error ? err.message : String(err)))
-      setLoginAttempts(prev => prev + 1)
-      setLastAttemptDate(new Date().toDateString())
+      alert('Unexpected error: ' + (err instanceof Error ? err.message : String(err)));
+      setLoginAttempts(prev => prev + 1);
+      setLastAttemptDate(new Date().toDateString());
       if (loginAttempts + 1 >= 5) {
-        setIsLocked(true)
-        setLockoutTimestamp(Date.now())
-        setRemainingTime(5 * 60)
+        setIsLocked(true);
+        setLockoutTimestamp(Date.now());
+        setRemainingTime(5 * 60);
       }
     }
   }
@@ -321,8 +316,8 @@ export default function LoginPage(): React.ReactElement {
           className="w-32 sm:w-40"
         />
       </div>
-      <form 
-        onSubmit={handleLogin} 
+      <form
+        onSubmit={handleLogin}
         className="bg-white rounded-lg shadow-lg p-6 sm:p-8 w-full max-w-sm mt-8 sm:mt-16"
         aria-label="Login Form"
       >
@@ -331,8 +326,8 @@ export default function LoginPage(): React.ReactElement {
         </h2>
         <div className="space-y-4">
           <div>
-            <label 
-              htmlFor="username" 
+            <label
+              htmlFor="username"
               className="block mb-1 text-sm font-medium text-[#003087]"
             >
               Username
@@ -351,8 +346,8 @@ export default function LoginPage(): React.ReactElement {
             />
           </div>
           <div className="relative">
-            <label 
-              htmlFor="password" 
+            <label
+              htmlFor="password"
               className="block mb-1 text-sm font-medium text-[#003087]"
             >
               Password
@@ -381,8 +376,8 @@ export default function LoginPage(): React.ReactElement {
           </div>
           {loginAttempts > 0 && (
             <p id="login-error" className="text-xs text-[#C1272D] mt-1">
-              {loginAttempts < 5 
-                ? `Attempts remaining: ${5 - loginAttempts}` 
+              {loginAttempts < 5
+                ? `Attempts remaining: ${5 - loginAttempts}`
                 : `Account locked. Please wait ${formatTime(remainingTime)}`}
             </p>
           )}
@@ -396,8 +391,8 @@ export default function LoginPage(): React.ReactElement {
               aria-label="Remember me checkbox"
               disabled={isLocked}
             />
-            <label 
-              htmlFor="rememberMe" 
+            <label
+              htmlFor="rememberMe"
               className="text-sm text-[#003087]"
             >
               Remember me
@@ -408,8 +403,8 @@ export default function LoginPage(): React.ReactElement {
           type="submit"
           disabled={isLocked}
           className={`w-full py-2 mt-6 rounded font-medium text-sm sm:text-base transition-colors ${
-            isLocked 
-              ? 'bg-gray-400 cursor-not-allowed' 
+            isLocked
+              ? 'bg-gray-400 cursor-not-allowed'
               : 'bg-[#003087] text-white hover:bg-[#002060]'
           }`}
           aria-label="Login button"
@@ -417,6 +412,12 @@ export default function LoginPage(): React.ReactElement {
         >
           Login
         </button>
+        <p className="text-center text-sm text-[#003087] mt-4">
+          Don't have an account?{' '}
+          <Link href="/registration" className="font-medium hover:text-[#002060] underline">
+            Register here
+          </Link>
+        </p>
       </form>
 
       {showQuote && (
@@ -442,5 +443,5 @@ export default function LoginPage(): React.ReactElement {
         All Rights Reserved by CSC R06 2025
       </footer>
     </div>
-  )
+  );
 }
