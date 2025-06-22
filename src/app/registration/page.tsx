@@ -29,10 +29,11 @@ export default function RegistrationPage(): React.ReactElement {
   };
 
   const validatePassword = (password: string): boolean => {
+    const specialChars = /[!@#$%^&*?]/;
     return (
-      password.length <= 10 &&
-      /[A-Z]/.test(password) && // At least one uppercase letter
-      /[!@#$%^&*(),.?":{}|<>]/.test(password) // At least one special character
+      password.length >= 6 &&
+      /\d/.test(password) && // At least one number
+      specialChars.test(password) // At least one special character
     );
   };
 
@@ -42,69 +43,70 @@ export default function RegistrationPage(): React.ReactElement {
 
     // Client-side validation
     if (!name.trim()) {
-      setError('Name is required.');
+      setError('Please enter your full name.');
       return;
     }
     if (!office.trim()) {
-      setError('Office is required.');
+      setError('Please enter your office.');
       return;
     }
     if (!officeHead.trim()) {
-      setError('Office Head is required.');
+      setError('Please enter your office head\'s name.');
       return;
     }
     if (!emailAddress.trim() || !validateEmail(emailAddress)) {
-      setError('Valid email address is required.');
+      setError('Please enter a valid email address.');
       return;
     }
     if (!role.trim()) {
-      setError('Role is required.');
-      return;
-    }
-    if (!/^[A-Z]+$/.test(role)) {
-      setError('Division must be in all uppercase letters (e.g., LSD).');
+      setError('Please enter your role.');
       return;
     }
     if (!username.trim() || !validateUsername(username)) {
-      setError('Username is required and can only contain alphanumeric characters, underscores, or hyphens.');
+      setError('Please enter a username using letters, numbers, underscores, or hyphens.');
       return;
     }
     if (!password) {
-      setError('Password is required.');
+      setError('Please enter a password.');
       return;
     }
     if (!validatePassword(password)) {
-      setError('Password must be 10 characters max, include at least one uppercase letter, and one special character (!@#$%^&*(),.?":{}|<>).');
+      setError('Password must be at least 6 characters long and include at least one number and one special character (!@#$%^&*?).');
       return;
     }
     if (password !== confirmPassword) {
-      setError('Passwords do not match.');
+      setError('Passwords do not match. Please try again.');
       return;
     }
 
     try {
+      const registrationData = {
+        name: name.trim(),
+        office: office.trim(),
+        office_head: officeHead.trim(),
+        email_address: emailAddress.trim().toLowerCase(),
+        role: role.trim(),
+        username: username.trim(),
+        password,
+      };
+      console.log('Inserting data into registration_pending:', registrationData);
+
+      // Insert into registration_pending only
       const { error: supabaseError } = await supabase
         .from('registration_pending')
-        .insert({
-          name: name.trim(),
-          office: office.trim(),
-          office_head: officeHead.trim(),
-          email_address: emailAddress.trim().toLowerCase(),
-          role: role.trim(),
-          username: username.trim(),
-          password,
-        });
+        .insert(registrationData);
 
       if (supabaseError) {
+        console.error('Supabase error:', supabaseError);
         if (supabaseError.message.includes('duplicate key value')) {
-          setError('Username or email address is already in use.');
+          setError('This username or email is already in use. Please try a different one.');
         } else {
-          setError('Error submitting registration: ' + supabaseError.message);
+          setError('There was an issue submitting your registration. Please try again.');
         }
         return;
       }
 
-      toast.success('Registration submitted successfully! Awaiting admin approval.', { duration: 3000 });
+      toast.success('Registration submitted! Awaiting admin approval.', { duration: 3000 });
       setName('');
       setOffice('');
       setOfficeHead('');
@@ -114,7 +116,8 @@ export default function RegistrationPage(): React.ReactElement {
       setPassword('');
       setConfirmPassword('');
     } catch (err) {
-      setError('Unexpected error: ' + (err instanceof Error ? err.message : String(err)));
+      console.error('Unexpected error:', err);
+      setError('An unexpected error occurred. Please try again later.');
     }
   }
 
@@ -199,22 +202,22 @@ export default function RegistrationPage(): React.ReactElement {
               className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[#003087] transition-colors text-[#003087] text-sm sm:text-base placeholder-gray-400"
               value={emailAddress}
               onChange={(e) => setEmailAddress(e.target.value)}
-              placeholder="Enter your email address"
+              placeholder="Enter your email (e.g., example@email.com)"
               aria-required="true"
             />
           </div>
           <div>
             <label htmlFor="role" className="block mb-1 text-sm font-medium text-[#003087]">
-              Division in (Upper Case)
+              Role
             </label>
             <input
               type="text"
               id="role"
               required
-              className={`w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-[#003087] transition-colors text-[#003087] text-sm sm:text-base placeholder-gray-400 ${error && error.includes('Division') ? 'border-[#C1272D] text-[#C1272D]' : 'border-gray-300'}`}
+              className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[#003087] transition-colors text-[#003087] text-sm sm:text-base placeholder-gray-400"
               value={role}
               onChange={(e) => setRole(e.target.value)}
-              placeholder="Enter your division (eg., LSD)"
+              placeholder="Enter your role (e.g., Manager)"
               aria-required="true"
             />
           </div>
@@ -229,7 +232,7 @@ export default function RegistrationPage(): React.ReactElement {
               className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[#003087] transition-colors text-[#003087] text-sm sm:text-base placeholder-gray-400"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="Enter your username"
+              placeholder="Enter your username (e.g., john_doe)"
               aria-required="true"
             />
           </div>
@@ -244,7 +247,7 @@ export default function RegistrationPage(): React.ReactElement {
               className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[#003087] transition-colors text-[#003087] text-sm sm:text-base placeholder-gray-400"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Enter your password"
+              placeholder="Enter a password (e.g., pass123!)"
               aria-required="true"
             />
             <button
