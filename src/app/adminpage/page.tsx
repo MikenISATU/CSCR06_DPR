@@ -95,8 +95,8 @@ export default function AdminPage() {
 
   async function fetchUsers() {
     const { data, error } = await supabase
-      .from("users2")
-      .select("id, username, role");
+    .from("users2")
+    .select("id, username, role, name, office, office_head, email_address");
 
     if (error) {
       toast.error("Error fetching users: " + error.message);
