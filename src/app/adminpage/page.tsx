@@ -9,6 +9,7 @@ import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Toolti
 import * as XLSX from 'xlsx';
 import toast, { Toaster } from 'react-hot-toast';
 
+
 export const dynamic = "force-dynamic";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
@@ -37,6 +38,15 @@ type PendingRegistration = {
   created_at: string;
 };
 
+// Interface for handleNavigation options
+interface NavigationOptions {
+  showCategories?: boolean;
+  showPending?: boolean;
+  showDelete?: boolean;
+  viewingReport?: boolean;
+  closeMobileMenu?: boolean;
+}
+
 
 export default function AdminPage() {
   const router = useRouter();
@@ -46,25 +56,25 @@ export default function AdminPage() {
   const [yearlyReports, setYearlyReports] = useState<Report[]>([]);
   const [showYearlyModal, setShowYearlyModal] = useState(false);
   const [isReportGenerated, setIsReportGenerated] = useState(false);
-  const [selectedMonth, setSelectedMonth] = useState<string>("");
-  const [selectedYear, setSelectedYear] = useState<string>("");
+  const [selectedMonth, setSelectedMonth] = useState<string>('');
+  const [selectedYear, setSelectedYear] = useState<string>('');
   const [categories, setCategories] = useState<Category[]>([]);
-  const [newCategory, setNewCategory] = useState<string>("");
-  const [selectedRole, setSelectedRole] = useState<string>("");
+  const [newCategory, setNewCategory] = useState<string>('');
+  const [selectedRole, setSelectedRole] = useState<string>('');
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
-  const [activeSlider, setActiveSlider] = useState<"users" | "admin" | null>(null);
+  const [activeSlider, setActiveSlider] = useState<'users' | 'admin' | null>(null);
   const [users, setUsers] = useState<UserAccount[]>([]);
   const [selectedUser, setSelectedUser] = useState<UserAccount | null>(null);
-  const [newUsername, setNewUsername] = useState<string>("");
-  const [newPassword, setNewPassword] = useState<string>("");
+  const [newUsername, setNewUsername] = useState<string>('');
+  const [newPassword, setNewPassword] = useState<string>('');
   const [showUserPassword, setShowUserPassword] = useState<boolean>(false);
-  const [adminNewUsername, setAdminNewUsername] = useState<string>("");
-  const [adminNewPassword, setAdminNewPassword] = useState<string>("");
+  const [adminNewUsername, setAdminNewUsername] = useState<string>('');
+  const [adminNewPassword, setAdminNewPassword] = useState<string>('');
   const [showAdminPassword, setShowAdminPassword] = useState<boolean>(false);
   const [showMonthlySummary, setShowMonthlySummary] = useState(false);
-  const [summaryMonth, setSummaryMonth] = useState<string>("");
-  const [summaryYear, setSummaryYear] = useState<string>("");
-  const [summaryRole, setSummaryRole] = useState<string>("");
+  const [summaryMonth, setSummaryMonth] = useState<string>('');
+  const [summaryYear, setSummaryYear] = useState<string>('');
+  const [summaryRole, setSummaryRole] = useState<string>('');
   const [pendingRegistrations, setPendingRegistrations] = useState<PendingRegistration[]>([]);
   const [showPendingModal, setShowPendingModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false);
@@ -910,6 +920,38 @@ export default function AdminPage() {
     { value: "12", label: "December" },
   ];
 
+type SectionId =
+  | 'report-visualization'
+  | 'manage-categories'
+  | 'report-per-office'
+  | 'consolidated-report'
+  | `department-${string}`;
+
+const handleNavigation = (sectionId: SectionId, options: NavigationOptions = {} as NavigationOptions): void => {
+  const {
+    showCategories = false,
+    showPending = false,
+    showDelete = false,
+    viewingReport = false,
+    closeMobileMenu = true,
+  } = options;
+
+  // Reset all conflicting states
+  setShowCategoriesView(showCategories);
+  setShowPendingModal(showPending);
+  setShowDeleteModal(showDelete);
+  setViewingDepartmentReport(viewingReport);
+  setShowDepartmentMenu(false);
+  setShowMobileDepartmentMenu(false);
+
+  // Close mobile menu if specified
+  if (closeMobileMenu) {
+    setShowMobileMenu(false);
+  }
+
+  // Scroll to the target section
+  document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth' });
+};
 
 return (
   <div className="min-h-screen bg-[#F5F6F5] p-2 sm:p-4 md:p-6 relative">
@@ -922,10 +964,7 @@ return (
           <h3 className="text-sm font-bold text-[#003087] mb-3 font-['Poppins']">Navigation</h3>
           <nav className="space-y-1">
             <button
-              onClick={() => {
-                document.getElementById('report-visualization')?.scrollIntoView({ behavior: 'smooth' });
-                setShowCategoriesView(false);
-              }}
+              onClick={() => handleNavigation('report-visualization')}
               className="w-full text-left px-3 py-1 text-[#003087] hover:bg-[#F5F6F5] rounded text-xs font-medium"
             >
               Report Visualization
@@ -943,7 +982,7 @@ return (
                   {uniqueRoles.map((role) => (
                     <button
                       key={role}
-                      onClick={() => document.getElementById(`department-${role.toLowerCase()}`)?.scrollIntoView({ behavior: 'smooth' })}
+                      onClick={() => handleNavigation(`department-${role.toLowerCase()}`)}
                       className="w-full text-left px-3 py-1 text-[#003087] hover:bg-[#F5F6F5] rounded text-xs"
                     >
                       {role}
@@ -953,28 +992,19 @@ return (
               )}
             </div>
             <button
-              onClick={() => {
-                document.getElementById('manage-categories')?.scrollIntoView({ behavior: 'smooth' });
-                setShowCategoriesView(true);
-              }}
+              onClick={() => handleNavigation('manage-categories')}
               className="w-full text-left px-3 py-1 text-[#003087] hover:bg-[#F5F6F5] rounded text-xs font-medium"
             >
               Manage Categories
             </button>
             <button
-              onClick={() => {
-                document.getElementById('report-per-office')?.scrollIntoView({ behavior: 'smooth' });
-                setShowCategoriesView(false);
-              }}
+              onClick={() => handleNavigation('report-per-office')}
               className="w-full text-left px-3 py-1 text-[#003087] hover:bg-[#F5F6F5] rounded text-xs font-medium"
             >
               Report per Office
             </button>
             <button
-              onClick={() => {
-                document.getElementById('consolidated-report')?.scrollIntoView({ behavior: 'smooth' });
-                setShowCategoriesView(false);
-              }}
+              onClick={() => handleNavigation('consolidated-report')}
               className="w-full text-left px-3 py-1 text-[#003087] hover:bg-[#F5F6F5] rounded text-xs font-medium"
             >
               Consolidated Report
@@ -985,94 +1015,83 @@ return (
     )}
 
     {/* Mobile Hamburger Menu */}
-    {!showCategoriesView && !showDeleteModal && !showPendingModal && !viewingDepartmentReport && showMobileMenu && (
-      <div className="md:hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex">
-        <div className="w-64 bg-white h-full p-4 shadow-lg fixed top-0 left-0 max-h-full overflow-y-auto">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-bold text-[#003087] font-['Poppins']">Menu</h3>
-            <button
-              onClick={() => setShowMobileMenu(false)}
-              className="text-[#C1272D] hover:text-[#a12025] text-xl"
-            >
-              ✕
-            </button>
-          </div>
-          <nav className="space-y-2">
-            <button
-              onClick={() => {
-                document.getElementById('report-visualization')?.scrollIntoView({ behavior: 'smooth' });
-                setShowMobileMenu(false);
-                setShowCategoriesView(false);
-              }}
-              className="w-full text-left px-4 py-2 text-[#003087] hover:bg-[#F5F6F5] rounded text-sm font-medium"
-            >
-              Report Visualization
-            </button>
-            <div>
+      {showMobileMenu && (
+        <div className="md:hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex">
+          <div className="w-64 bg-white h-full p-4 shadow-lg fixed top-0 left-0 max-h-full overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold text-[#003087] font-['Poppins']">Menu</h3>
               <button
-                onClick={() => setShowMobileDepartmentMenu(!showMobileDepartmentMenu)}
-                className="w-full flex justify-between items-center px-4 py-2 text-[#003087] hover:bg-[#F5F6F5] rounded text-sm font-medium"
+                onClick={() => setShowMobileMenu(false)}
+                className="text-[#C1272D] hover:text-[#a12025] text-xl"
               >
-                Department Reports
-                <span>{showMobileDepartmentMenu ? '▲' : '▼'}</span>
+                ✕
               </button>
-              {showMobileDepartmentMenu && (
-                <div className="pl-6 space-y-1 max-h-40 overflow-y-auto">
-                  {uniqueRoles.map((role) => (
-                    <button
-                      key={role}
-                      onClick={() => {
-                        document.getElementById(`department-${role.toLowerCase()}`)?.scrollIntoView({ behavior: 'smooth' });
-                        setShowMobileMenu(false);
-                      }}
-                      className="w-full text-left px-4 py-1 text-[#003087] hover:bg-[#F5F6F5] rounded text-xs"
-                    >
-                      {role}
-                    </button>
-                  ))}
-                </div>
-              )}
             </div>
-            <button
-              onClick={() => {
-                document.getElementById('manage-categories')?.scrollIntoView({ behavior: 'smooth' });
-                setShowMobileMenu(false);
-                setShowCategoriesView(true);
-              }}
-              className="w-full text-left px-4 py-2 text-[#003087] hover:bg-[#F5F6F5] rounded text-sm font-medium"
-            >
-              Manage Categories
-            </button>
-            <button
-              onClick={() => {
-                document.getElementById('report-per-office')?.scrollIntoView({ behavior: 'smooth' });
-                setShowMobileMenu(false);
-                setShowCategoriesView(false);
-              }}
-              className="w-full text-left px-4 py-2 text-[#003087] hover:bg-[#F5F6F5] rounded text-sm font-medium"
-            >
-              Report per Office
-            </button>
-            <button
-              onClick={() => {
-                document.getElementById('consolidated-report')?.scrollIntoView({ behavior: 'smooth' });
-                setShowMobileMenu(false);
-                setShowCategoriesView(false);
-              }}
-              className="w-full text-left px-4 py-2 text-[#003087] hover:bg-[#F5F6F5] rounded text-sm font-medium"
-            >
-              Consolidated Report
-            </button>
-          </nav>
+            <nav className="space-y-2">
+              <button
+                onClick={() => handleNavigation('report-visualization')}
+                className="w-full text-left px-4 py-2 text-[#003087] hover:bg-[#F5F6F5] rounded text-sm font-medium"
+              >
+                Report Visualization
+              </button>
+              <div>
+                <button
+                  onClick={() => setShowMobileDepartmentMenu(!showMobileDepartmentMenu)}
+                  className="w-full flex justify-between items-center px-4 py-2 text-[#003087] hover:bg-[#F5F6F5] rounded text-sm font-medium"
+                >
+                  Department Reports
+                  <span>{showMobileDepartmentMenu ? '▲' : '▼'}</span>
+                </button>
+                {showMobileDepartmentMenu && (
+                  <div className="pl-6 space-y-1 max-h-40 overflow-y-auto">
+                    {uniqueRoles.map((role) => (
+                      <button
+                        key={role}
+                        onClick={() => handleNavigation(`department-${role.toLowerCase()}`)}
+                        className="w-full text-left px-4 py-1 text-[#003087] hover:bg-[#F5F6F5] rounded text-xs"
+                      >
+                        {role}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={() => handleNavigation('manage-categories', { showCategories: true })}
+                className="w-full text-left px-4 py-2 text-[#003087] hover:bg-[#F5F6F5] rounded text-sm font-medium"
+              >
+                Manage Categories
+              </button>
+              <button
+                onClick={() => handleNavigation('report-per-office')}
+                className="w-full text-left px-4 py-2 text-[#003087] hover:bg-[#F5F6F5] rounded text-sm font-medium"
+              >
+                Report per Office
+              </button>
+              <button
+                onClick={() => handleNavigation('consolidated-report')}
+                className="w-full text-left px-4 py-2 text-[#003087] hover:bg-[#F5F6F5] rounded text-sm font-medium"
+              >
+                Consolidated Report
+              </button>
+            </nav>
+          </div>
+          <div className="flex-1" onClick={() => setShowMobileMenu(false)}></div>
         </div>
-        <div className="flex-1" onClick={() => setShowMobileMenu(false)}></div>
-      </div>
-    )}
+      )}
 
     {/* Mobile Hamburger Menu Button */}
-    <div className="md:hidden fixed top-4 left-4 z-50">
+        <div className="md:hidden fixed top-4 left-4 z-50">
       <button
-        onClick={() => setShowMobileMenu(!showMobileMenu)}
+        onClick={() => {
+          setShowMobileMenu((prev) => !prev); // Toggle menu
+          // Reset conflicting states to ensure menu renders
+          setShowCategoriesView(false);
+          setShowPendingModal(false);
+          setShowDeleteModal(false);
+          setViewingDepartmentReport(false);
+          setShowMobileDepartmentMenu(false); // Reset department menu as well
+        }}
         className="p-2 bg-[#003087] text-white rounded hover:bg-[#002060]"
       >
         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1110,7 +1129,6 @@ return (
               onClick={() => {
                 setShowPendingModal(true);
                 setShowMobileMenu(false);
-                setShowDepartmentMenu(false);
               }}
               className="py-1 px-2 sm:py-2 sm:px-4 bg-[#003087] text-white rounded hover:bg-[#002060] transition-colors font-medium text-xs sm:text-sm"
             >
@@ -1122,6 +1140,7 @@ return (
               </span>
             )}
           </div>
+
           <button
             onClick={() => setActiveSlider("users")}
             className="py-1 px-2 sm:py-2 sm:px-4 bg-[#003087] text-white rounded hover:bg-[#002060] transition-colors font-medium text-xs sm:text-sm"
@@ -1209,7 +1228,10 @@ return (
                           <button
                             onClick={() => {
                               setViewReport(r);
-                              setViewingDepartmentReport(true); // Set flag when viewing department report
+                              setViewingDepartmentReport(true);
+                              setShowCategoriesView(false);
+                              setShowPendingModal(false);
+                              setShowDeleteModal(false);
                             }}
                             className="text-[#003087] hover:text-[#002060] font-medium transition-colors text-xs sm:text-sm"
                           >
@@ -1588,7 +1610,7 @@ return (
             <button
               onClick={() => {
                 setViewReport(null);
-                setViewingDepartmentReport(false); // Reset flag when closing department report
+                setViewingDepartmentReport(false);
               }}
               className="mt-3 sm:mt-4 w-full py-1 sm:py-2 bg-[#003087] text-white rounded hover:bg-[#002060] transition-colors font-medium text-xs sm:text-sm"
             >
@@ -1903,7 +1925,6 @@ return (
                       setUserToDelete(selectedUser.id);
                       setShowDeleteModal(true);
                       setShowMobileMenu(false);
-                      setShowDepartmentMenu(false);
                     }}
                     className="flex-1 py-1 sm:p-2 bg-[#C1272D] text-white rounded hover:bg-[#a12025] transition-colors font-semibold text-xs sm:text-sm"
                   >
