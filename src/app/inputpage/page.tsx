@@ -1,4 +1,4 @@
-"use client"
+'use client'
 
 import { useState, useEffect, FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
@@ -7,6 +7,7 @@ import { supabase } from './supbase'
 import * as XLSX from 'xlsx'
 import { Bar } from 'react-chartjs-2'
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend } from 'chart.js'
+import toast, { Toaster } from 'react-hot-toast'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
 
@@ -25,6 +26,24 @@ export default function InputPage() {
   const [viewReport, setViewReport] = useState<Report | null>(null)
   const [showMonthlySummary, setShowMonthlySummary] = useState(false)
   const [categories, setCategories] = useState<string[]>([])
+  const [currentYear, setCurrentYear] = useState(new Date().getFullYear().toString())
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [reportToDelete, setReportToDelete] = useState<string | null>(null)
+
+  // Update currentYear if the year changes while the page is open
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const newYear = new Date().getFullYear().toString()
+      if (newYear !== currentYear) {
+        const toastId = toast.loading('Updating year...')
+        setCurrentYear(newYear)
+        toast.success(`Year updated to ${newYear}`, { id: toastId, duration: 3000 })
+        fetchReports()
+      }
+    }, 60000) // Check every minute
+
+    return () => clearInterval(interval)
+  }, [currentYear])
 
   useEffect(() => {
     const stored = localStorage.getItem('scanflow360_user')
@@ -34,80 +53,103 @@ export default function InputPage() {
     }
     const parsedUser = JSON.parse(stored)
     setUser(parsedUser)
-    if (parsedUser) {
+    if (parsedUser && parsedUser.role !== "ADMIN") {
       fetchCategories(parsedUser.role)
+    } else {
+      router.replace('/')
+      toast.error('Access denied: Non-admin users only', { duration: 3000 })
     }
   }, [router])
 
   useEffect(() => {
-    if (user) fetchReports()
+    if (user && user.role !== "ADMIN") {
+      fetchCategories(user.role)
+      fetchReports()
+    }
   }, [user])
 
   async function fetchCategories(role: string) {
+    toast('Fetching categories...', { duration: 3000 })
     const { data, error } = await supabase
       .from('record_categories')
       .select('category')
       .eq('role', role.toUpperCase())
 
     if (error) {
-      alert('Error fetching categories: ' + error.message)
+      toast(`Error fetching categories: ${error.message}`, { duration: 3000 })
       return
     }
 
     const categoryList = data?.map((item: { category: string }) => item.category) || []
     setCategories([...categoryList, 'Other'])
+    toast('Categories loaded successfully', { duration: 3000 })
   }
 
   async function fetchReports() {
-    const { data, error } = await supabase
-      .from('monthly_reports1')
-      .select('id, type_of_record, period_covered, no_of_pages, created_at')
-      .eq('useriud', user!.id)
-      .order('created_at', { ascending: false })
-    if (error) {
-      alert('Error fetching reports: ' + error.message)
-      return
+    const toastId = toast.loading('Fetching reports...', { duration: 3000 })
+    try {
+      const { data, error } = await supabase
+        .from('monthly_reports1')
+        .select('id, type_of_record, period_covered, no_of_pages, created_at')
+        .eq('useriud', user!.id)
+        .order('created_at', { ascending: false })
+      if (error) throw error
+      setReports(data || [])
+      toast.success('Reports loaded successfully', { id: toastId, duration: 3000 })
+    } catch (error) {
+      const errorMsg = (error instanceof Error) ? error.message : String(error)
+      toast.error(`Error fetching reports: ${errorMsg}`, { id: toastId, duration: 3000 })
     }
-    setReports(data || [])
   }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
-    if (!typeOfRecord) return alert('Select a type of record')
-    if (!periodCovered) return alert('Enter period covered')
-    if (typeOfRecord === 'Other' && !customType) return alert('Enter a custom type of record')
+    if (!typeOfRecord) return toast.error('Select a type of record', { duration: 3000 })
+    if (!periodCovered) return toast.error('Enter period covered', { duration: 3000 })
+    if (typeOfRecord === 'Other' && !customType) return toast.error('Enter a custom type of record', { duration: 3000 })
 
     const finalType = typeOfRecord === 'Other' ? customType : typeOfRecord
-
-    const { error } = await supabase.from('monthly_reports1').upsert({
-      useriud: user!.id,
-      type_of_record: finalType,
-      period_covered: periodCovered,
-      no_of_pages: noOfPages,
-    })
-    if (error) {
-      alert('Error saving report: ' + error.message)
-      return
+    const toastId = toast.loading('Saving report...', { duration: 3000 })
+    try {
+      const { error } = await supabase.from('monthly_reports1').upsert({
+        useriud: user!.id,
+        type_of_record: finalType,
+        period_covered: periodCovered,
+        no_of_pages: noOfPages,
+      })
+      if (error) throw error
+      toast.success('Report saved successfully', { id: toastId, duration: 3000 })
+      setTypeOfRecord('')
+      setCustomType('')
+      setPeriodCovered('')
+      setNoOfPages(0)
+      fetchReports()
+    } catch (error) {
+      const errorMsg = (error instanceof Error) ? error.message : String(error)
+      toast.error(`Error saving report: ${errorMsg}`, { id: toastId, duration: 3000 })
     }
-    setTypeOfRecord('')
-    setCustomType('')
-    setPeriodCovered('')
-    setNoOfPages(0)
-    fetchReports()
   }
 
   async function handleDelete(id: string) {
-    const { error } = await supabase.from('monthly_reports1').delete().eq('id', id)
-    if (error) {
-      alert('Error deleting report: ' + error.message)
-      return
+    const toastId = toast.loading('Deleting report...', { duration: 3000 })
+    try {
+      const { error } = await supabase.from('monthly_reports1').delete().eq('id', id)
+      if (error) throw error
+      toast.success('Report deleted successfully', { id: toastId, duration: 3000 })
+      fetchReports()
+      setShowDeleteModal(false)
+      setReportToDelete(null)
+    } catch (error) {
+      const errorMsg = (error instanceof Error) ? error.message : String(error)
+      toast.error(`Error deleting report: ${errorMsg}`, { id: toastId, duration: 3000 })
     }
-    fetchReports()
   }
 
   function logout() {
+    const toastId = toast.loading('Logging out...', { duration: 3000 })
     localStorage.removeItem('scanflow360_user')
     router.replace('/')
+    toast.success('Logged out successfully', { id: toastId, duration: 3000 })
   }
 
   function truncateRecordName(name: string, maxLength: number = 20): string {
@@ -140,18 +182,17 @@ export default function InputPage() {
   function generateReport(periodType: 'monthly' | 'semestral' | 'yearly') {
     const currentDate = new Date()
     const currentMonth = currentDate.getMonth() + 1
-    const currentYear = currentDate.getFullYear()
     let reportTitle: string
     let filteredReports: Report[]
     let periodName: string
 
     if (periodType === 'monthly') {
-      reportTitle = `For the month of ${currentDate.toLocaleString('default', { month: 'long' })} ${currentYear}`
+      reportTitle = ` the month of ${currentDate.toLocaleString('default', { month: 'long' })} ${currentYear}`
       periodName = `${currentDate.toLocaleString('default', { month: 'long' })}_${currentYear}`
       filteredReports = reports.filter((report) => {
         if (!report.created_at) return false
         const reportDate = new Date(report.created_at)
-        return reportDate.getMonth() + 1 === currentMonth && reportDate.getFullYear() === currentYear
+        return reportDate.getMonth() + 1 === currentMonth && reportDate.getFullYear() === parseInt(currentYear)
       })
     } else if (periodType === 'semestral') {
       const semester = currentMonth <= 6 ? 'First' : 'Second'
@@ -160,22 +201,22 @@ export default function InputPage() {
       filteredReports = reports.filter((report) => {
         if (!report.created_at) return false
         const reportDate = new Date(report.created_at)
-        return reportDate.getFullYear() === currentYear && 
+        return reportDate.getFullYear() === parseInt(currentYear) && 
                ((semester === 'First' && reportDate.getMonth() + 1 <= 6) ||
                 (semester === 'Second' && reportDate.getMonth() + 1 > 6))
       })
     } else {
-      reportTitle = `For the Year ${currentYear}`
+      reportTitle = `for the Year ${currentYear}`
       periodName = `Year_${currentYear}`
       filteredReports = reports.filter((report) => {
         if (!report.created_at) return false
         const reportDate = new Date(report.created_at)
-        return reportDate.getFullYear() === currentYear
+        return reportDate.getFullYear() === parseInt(currentYear)
       })
     }
 
     if (filteredReports.length === 0) {
-      alert(`No reports found for ${reportTitle}.`)
+      toast.error(`No reports found for ${reportTitle}`, { duration: 3000 })
       return
     }
 
@@ -247,6 +288,7 @@ export default function InputPage() {
     const workbook = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(workbook, worksheet, `${periodName}_Report`)
     XLSX.writeFile(workbook, `${periodName}_Report.xlsx`)
+    toast.success(`Report generated: ${periodName}`, { duration: 3000 })
   }
 
   function viewMonthlySummary() {
@@ -255,7 +297,6 @@ export default function InputPage() {
 
   const currentDate = new Date()
   const currentMonth = currentDate.getMonth() + 1
-  const currentYear = currentDate.getFullYear()
   const monthName = currentDate.toLocaleString('default', { month: 'long' })
 
   const monthlyReports = reports.filter((report) => {
@@ -263,7 +304,7 @@ export default function InputPage() {
     const reportDate = new Date(report.created_at)
     return (
       reportDate.getMonth() + 1 === currentMonth &&
-      reportDate.getFullYear() === currentYear
+      reportDate.getFullYear() === parseInt(currentYear)
     )
   })
 
@@ -357,6 +398,7 @@ export default function InputPage() {
 
   return (
     <div className="min-h-screen bg-[#F5F6F5] flex items-center justify-center p-4 sm:p-6">
+      <Toaster position="top-right" />
       <div className="w-full max-w-5xl bg-white rounded-lg shadow-lg p-4 sm:p-6">
         <header className="flex flex-col sm:flex-row justify-between items-center mb-6 space-y-4 sm:space-y-0">
           <div className="flex flex-col sm:flex-row items-center space-y-4 sm:space-y-0 sm:space-x-4">
@@ -507,7 +549,10 @@ export default function InputPage() {
                   </div>
                   <div className="flex space-x-3">
                     <button
-                      onClick={() => handleDelete(r.id)}
+                      onClick={() => {
+                        setReportToDelete(r.id)
+                        setShowDeleteModal(true)
+                      }}
                       className="text-[#C1272D] hover:text-[#a12025] font-medium transition-colors text-sm sm:text-base"
                     >
                       Delete
@@ -599,6 +644,39 @@ export default function InputPage() {
               >
                 Close
               </button>
+            </div>
+          </div>
+        )}
+
+        {showDeleteModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-2 sm:p-4">
+            <div className="bg-white p-3 sm:p-4 md:p-6 rounded-lg shadow-lg w-full max-w-md max-h-[90vh] overflow-y-auto">
+              <h2 className="text-base sm:text-lg md:text-xl font-bold text-[#003087] mb-3 sm:mb-4 font-['Poppins']">
+                Confirm Deletion
+              </h2>
+              <p className="text-gray-700 text-xs sm:text-sm md:text-base mb-4">
+                Are you sure you want to delete the report{' '}
+                <span className="font-medium text-[#003087]">
+                  {reports.find((r) => r.id === reportToDelete)?.type_of_record}
+                </span>? This action cannot be undone.
+              </p>
+              <div className="flex space-x-3">
+                <button
+                  onClick={() => reportToDelete && handleDelete(reportToDelete)}
+                  className="flex-1 py-1 sm:p-2 bg-[#C1272D] text-white rounded hover:bg-[#a12025] transition-colors font-medium text-xs sm:text-sm"
+                >
+                  Delete
+                </button>
+                <button
+                  onClick={() => {
+                    setShowDeleteModal(false)
+                    setReportToDelete(null)
+                  }}
+                  className="flex-1 py-1 sm:p-2 bg-[#003087] text-white rounded hover:bg-[#002060] transition-colors font-medium text-xs sm:text-sm"
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           </div>
         )}
