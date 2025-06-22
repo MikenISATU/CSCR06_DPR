@@ -1325,46 +1325,63 @@ export default function AdminPage() {
           </div>
         </div>
 
-        <div className="mb-6 sm:mb-8">
+                <div className="mb-6 sm:mb-8">
           <h2 className="text-base sm:text-lg md:text-xl font-semibold text-[#003087] mb-3 sm:mb-4 font-['Poppins']">
             Report Visualization
           </h2>
           <div className="h-64 sm:h-80">
-            <Bar data={chartData} options={chartOptions} />
+            <Bar
+              data={{
+                labels: uniqueRoles,
+                datasets: [
+                  {
+                    label: `Total Pages (Year ${currentYear})`,
+                    data: uniqueRoles.map((role) =>
+                      reports
+                        .filter(
+                          (r) =>
+                            r.role.toUpperCase() === role.toUpperCase() &&
+                            new Date(r.created_at).getFullYear() === parseInt(currentYear)
+                        )
+                        .reduce((sum, r) => sum + (r.no_of_pages || 0), 0)
+                    ),
+                    backgroundColor: ["#003087", "#C1272D", "#FFD700", "#00A86B", "#8B008B"],
+                    borderColor: ["#002060", "#a12025", "#e6c200", "#008B5D", "#6A006A"],
+                    borderWidth: 1,
+                  },
+                ],
+              }}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: {
+                    position: "top",
+                  },
+                  title: {
+                    display: true,
+                    text: `Total Pages per Department (Year ${currentYear})`,
+                  },
+                },
+                scales: {
+                  y: {
+                    beginAtZero: true,
+                    title: {
+                      display: true,
+                      text: "Number of Pages",
+                    },
+                  },
+                  x: {
+                    title: {
+                      display: true,
+                      text: "Department",
+                    },
+                  },
+                },
+              }}
+            />
           </div>
         </div>
-
-        {viewReport && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-2 sm:p-4">
-            <div className="bg-white p-3 sm:p-4 md:p-6 rounded-lg shadow-lg w-full max-w-md max-h-[90vh] overflow-y-auto">
-              <h2 className="text-base sm:text-lg md:text-xl font-bold text-[#003087] mb-3 sm:mb-4 font-['Poppins']">
-                Report Details
-              </h2>
-              <p className="text-gray-700 text-xs sm:text-sm md:text-base">
-                <span className="font-medium text-[#003087]">Type of Record:</span>{" "}
-                {viewReport?.type_of_record}
-              </p>
-              <p className="text-gray-700 text-xs sm:text-sm md:text-base">
-                <span className="font-medium text-[#003087]">Period Covered:</span>{" "}
-                {viewReport?.period_covered}
-              </p>
-              <p className="text-gray-700 text-xs sm:text-sm md:text-base">
-                <span className="font-medium text-[#003087]">Number of Pages:</span>{" "}
-                {viewReport?.no_of_pages}
-              </p>
-              <p className="text-gray-700 text-xs sm:text-sm md:text-base">
-                <span className="font-medium text-[#003087]">Role:</span>{" "}
-                {viewReport?.role}
-              </p>
-              <button
-                onClick={() => setViewReport(null)}
-                className="mt-3 sm:mt-4 w-full py-1 sm:py-2 bg-[#003087] text-white rounded hover:bg-[#002060] transition-colors font-medium text-xs sm:text-sm"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        )}
 
         {showPendingModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-2 sm:p-4">
