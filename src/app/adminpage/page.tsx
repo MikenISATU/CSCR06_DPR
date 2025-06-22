@@ -917,7 +917,7 @@ return (
 
     {/* Desktop Floating Navigation Menu */}
     {!showCategoriesView && !showDeleteModal && !showPendingModal && !viewingDepartmentReport && (
-      <div className="hidden md:block absolute top-20 left-[calc(50%-750px)] w-48 bg-white shadow-lg rounded-lg z-50 max-h-[calc(100vh-4rem)] overflow-y-auto">
+      <div className="hidden md:block fixed top-20 left-[calc(50%-750px)] w-48 bg-white shadow-lg rounded-lg z-50 max-h-[calc(100vh-4rem)] overflow-y-auto">
         <div className="p-3">
           <h3 className="text-sm font-bold text-[#003087] mb-3 font-['Poppins']">Navigation</h3>
           <nav className="space-y-1">
@@ -987,7 +987,7 @@ return (
     {/* Mobile Hamburger Menu */}
     {!showCategoriesView && !showDeleteModal && !showPendingModal && !viewingDepartmentReport && showMobileMenu && (
       <div className="md:hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex">
-        <div className="w-64 bg-white h-full p-4 shadow-lg">
+        <div className="w-64 bg-white h-full p-4 shadow-lg fixed top-0 left-0 max-h-full overflow-y-auto">
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-lg font-bold text-[#003087] font-['Poppins']">Menu</h3>
             <button
