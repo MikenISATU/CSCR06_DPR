@@ -75,7 +75,7 @@ export default function InputPage() {
   }
 
   async function fetchReports() {
-    if (!user) return
+    if (!user) return // Prevent fetching if user is null
     const toastId = toast.loading('Fetching reports...', { duration: 3000 })
     try {
       const { data, error } = await supabase
@@ -344,10 +344,11 @@ export default function InputPage() {
   const dailyGroupedReports = monthlyReports.reduce((acc, report) => {
     if (!report.created_at) return acc
     const reportDate = new Date(report.created_at)
+    // Format date as MM/DD/YYYY for consistency
     const dateKey = reportDate.toLocaleDateString('en-US', {
       month: '2-digit',
       day: '2-digit',
-      year: 'numeric',
+      year: 'numeric'
     })
     if (!acc[dateKey]) acc[dateKey] = {}
     if (!acc[dateKey][report.type_of_record]) acc[dateKey][report.type_of_record] = 0
@@ -362,38 +363,37 @@ export default function InputPage() {
         const dateB = new Date(b)
         return dateA.getTime() - dateB.getTime()
       })
-      const types = [...new Set(monthlyReports.map((r) => r.type_of_record))]
+      const types = [...new Set(monthlyReports.map(r => r.type_of_record))]
+      // Replace '0' with the current date dynamically
       const currentDate = new Date().toLocaleDateString('en-US', {
         month: '2-digit',
         day: '2-digit',
-        year: 'numeric',
+        year: 'numeric'
       })
       const updatedLabels = dates.length > 0 ? dates : [currentDate]
       return {
         labels: updatedLabels,
         datasets: types.map((type, index) => ({
           label: type,
-          data: updatedLabels.map((date) =>
-            dailyGroupedReports[date] ? dailyGroupedReports[date][type] || 0 : 0
-          ),
+          data: updatedLabels.map(date => dailyGroupedReports[date] ? dailyGroupedReports[date][type] || 0 : 0),
           backgroundColor: [
-            '#003087',
-            '#0047AB',
-            '#005CBF',
-            '#006EE6',
-          ][index % 4],
+            '#003087', // Darkest blue (CSC theme base)
+            '#0047AB', // Medium blue
+            '#005CBF', // Lighter blue
+            '#006EE6', // Lightest blue
+          ][index % 4], // Cycle through colors
           stack: 'Stack',
         })),
       }
     }
     return {
-      labels: [...new Set(reportsData.map((r) => r.type_of_record))],
+      labels: [...new Set(reportsData.map(r => r.type_of_record))],
       datasets: [
         {
           label: `Total Pages`,
-          data: [...new Set(reportsData.map((r) => r.type_of_record))].map((type) =>
+          data: [...new Set(reportsData.map(r => r.type_of_record))].map(type =>
             reportsData
-              .filter((r) => r.type_of_record === type)
+              .filter(r => r.type_of_record === type)
               .reduce((sum, r) => sum + r.no_of_pages, 0)
           ),
           backgroundColor: '#003087',
@@ -407,23 +407,17 @@ export default function InputPage() {
   const chartOptions = (reportsData: Report[]) => ({
     responsive: true,
     maintainAspectRatio: false,
-    aspectRatio: window.innerWidth < 640 ? 1 : 1.5, // Adjust aspect ratio for mobile
     plugins: {
       legend: {
         position: 'top' as const,
-        labels: {
-          font: {
-            size: window.innerWidth < 640 ? 8 : 10,
-          },
-        },
       },
       title: {
         display: true,
-        text: reportsData === monthlyReports
+        text: reportsData === monthlyReports 
           ? `Daily Pages per Record Type (${monthName} ${selectedYear})`
           : `Total Pages per Record Type (${showMonthlySummary ? `${monthName} ${selectedYear}` : showSemestralSummary ? `Semester ${selectedYear}` : `Year ${selectedYear}`})`,
         font: {
-          size: window.innerWidth < 640 ? 10 : 12,
+          size: 12,
         },
       },
     },
@@ -434,29 +428,24 @@ export default function InputPage() {
           display: true,
           text: 'Number of Pages',
           font: {
-            size: window.innerWidth < 640 ? 8 : 10,
+            size: 10,
           },
         },
         stacked: reportsData === monthlyReports,
-        ticks: {
-          font: {
-            size: window.innerWidth < 640 ? 6 : 8,
-          },
-        },
       },
       x: {
         title: {
           display: true,
           text: reportsData === monthlyReports ? 'Date' : 'Type of Record',
           font: {
-            size: window.innerWidth < 640 ? 8 : 10,
+            size: 10,
           },
         },
         ticks: {
           font: {
-            size: window.innerWidth < 640 ? 6 : 8,
+            size: 8,
           },
-          callback: function (value: string | number) {
+          callback: function(value: string | number) {
             const label = String(value)
             return label.length > 10 ? label.substring(0, 7) + '...' : label
           },
@@ -532,10 +521,8 @@ export default function InputPage() {
               <h2 className="text-sm sm:text-base md:text-lg font-bold text-[#003087] mb-3 sm:mb-4">
                 Current Month Reports ({monthName} {selectedYear})
               </h2>
-              <div className="w-full overflow-x-auto">
-                <div className="min-w-[300px]">
-                  <Bar data={chartData(monthlyReports)} options={chartOptions(monthlyReports)} />
-                </div>
+              <div className="h-40 sm:h-48 md:h-64">
+                <Bar data={chartData(monthlyReports)} options={chartOptions(monthlyReports)} />
               </div>
             </div>
 
@@ -862,27 +849,13 @@ export default function InputPage() {
                   </select>
                 </div>
               )}
-              <div className="w-full overflow-x-auto">
-                <div className="min-w-[300px]">
-                  <Bar
-                    data={chartData(
-                      showMonthlySummary
-                        ? filteredReports
-                        : showSemestralSummary
-                        ? semestralReports
-                        : yearlyReports
-                    )}
-                    options={chartOptions(
-                      showMonthlySummary
-                        ? filteredReports
-                        : showSemestralSummary
-                        ? semestralReports
-                        : yearlyReports
-                    )}
-                  />
-                </div>
+              <div className="mb-3 sm:mb-4 h-40 sm:h-48 md:h-64">
+                <Bar 
+                  data={chartData(showMonthlySummary ? filteredReports : showSemestralSummary ? semestralReports : yearlyReports)} 
+                  options={chartOptions(showMonthlySummary ? filteredReports : showSemestralSummary ? semestralReports : yearlyReports)} 
+                />
               </div>
-              <div className="overflow-x-auto max-h-60 mt-4">
+              <div className="overflow-x-auto max-h-60">
                 <table className="w-full border-collapse table-auto text-xs">
                   <thead>
                     <tr className="bg-[#003087] text-white sticky top-0">
