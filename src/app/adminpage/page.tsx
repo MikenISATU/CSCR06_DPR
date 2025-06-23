@@ -1,5 +1,4 @@
 'use client'
-import "colors";
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
@@ -37,6 +36,11 @@ type PendingRegistration = {
   password: string;
   created_at: string;
 };
+
+function truncateLabel(text: string, maxLength: number): string {
+  if (text.length <= maxLength) return text;
+  return text.slice(0, maxLength - 3) + "...";
+}
 
 // Interface for handleNavigation options
 interface NavigationOptions {
@@ -86,6 +90,7 @@ export default function AdminPage() {
   const [showCategoriesView, setShowCategoriesView] = useState(false);
   const [viewingDepartmentReport, setViewingDepartmentReport] = useState(false);
   const currentYear = new Date().getFullYear().toString();
+  const ADMIN_MANUAL_LINK = "https://drive.google.com/your-public-link-here"; // Replace with actual Google Drive public link
 
   useEffect(() => {
     const stored = localStorage.getItem("scanflow360_user");
@@ -488,7 +493,7 @@ export default function AdminPage() {
     let currentRow: number = 6;
     let totalPagesOverall: number = 0;
 
-    const tableHeader: string[] = ["No.", "Type of Record", "Period Covered", "No. of Pages", "Role"];
+    const tableHeader: string[] = ["No.", "Type of Record", "Period Covered", "No. of Pages", "Division"];
     XLSX.utils.sheet_add_aoa(worksheet, [tableHeader], { origin: "A" + currentRow });
     applyStyles(worksheet, currentRow - 1, currentRow - 1, tableHeader.length, true);
 
@@ -501,31 +506,20 @@ export default function AdminPage() {
       const periods = report.period_covered
         ? report.period_covered.split(",").map((p) => p.trim())
         : [""];
-      const noOfPages =
-        report.no_of_pages !== null && report.no_of_pages !== undefined
-          ? report.no_of_pages
-          : "N/A";
+      const noOfPages = report.no_of_pages ?? 0;
 
-      if (periods.length > 1) {
-        const mainRow = [reportIndex++, report.type_of_record, "", "", report.role];
-        XLSX.utils.sheet_add_aoa(worksheet, [mainRow], { origin: "A" + currentRow });
+      periods.forEach((period, idx) => {
+        const row = [
+          idx === 0 ? reportIndex++ : "",
+          idx === 0 ? report.type_of_record : "",
+          period,
+          idx === 0 ? noOfPages : "",
+          idx === 0 ? report.role : "",
+        ];
+        XLSX.utils.sheet_add_aoa(worksheet, [row], { origin: "A" + currentRow });
         currentRow++;
-
-        periods.forEach((period, idx) => {
-          const pages = idx === 0 ? noOfPages : "";
-          const subRow = ["", "", period, pages, ""];
-          XLSX.utils.sheet_add_aoa(worksheet, [subRow], { origin: "A" + currentRow });
-          currentRow++;
-        });
-      } else {
-        const singleRow = [reportIndex++, report.type_of_record, periods[0], noOfPages, report.role];
-        XLSX.utils.sheet_add_aoa(worksheet, [singleRow], { origin: "A" + currentRow });
-        currentRow++;
-      }
-
-      if (noOfPages !== "N/A") {
-        totalPagesOverall += Number(noOfPages) || 0;
-      }
+        if (idx === 0) totalPagesOverall += noOfPages;
+      });
     });
 
     applyStyles(worksheet, 6, currentRow - 1, tableHeader.length);
@@ -600,7 +594,7 @@ export default function AdminPage() {
     applyStyles(worksheet, 0, 3, 4, true, true);
 
     let currentRow: number = 6;
-    const tableHeader: string[] = ["No.", "Type of Record", "Period Covered", "No. of Pages", "Role"];
+    const tableHeader: string[] = ["No.", "Type of Record", "Period Covered", "No. of Pages", "Division"];
     XLSX.utils.sheet_add_aoa(worksheet, [tableHeader], { origin: "A" + currentRow });
     applyStyles(worksheet, currentRow - 1, currentRow - 1, tableHeader.length, true);
 
@@ -613,31 +607,20 @@ export default function AdminPage() {
       const periods = report.period_covered
         ? report.period_covered.split(",").map((p) => p.trim())
         : [""];
-      const noOfPages =
-        report.no_of_pages !== null && report.no_of_pages !== undefined
-          ? report.no_of_pages
-          : "N/A";
+      const noOfPages = report.no_of_pages ?? 0;
 
-      if (periods.length > 1) {
-        const mainRow = [reportIndex++, report.type_of_record, "", "", report.role];
-        XLSX.utils.sheet_add_aoa(worksheet, [mainRow], { origin: "A" + currentRow });
+      periods.forEach((period, idx) => {
+        const row = [
+          idx === 0 ? reportIndex++ : "",
+          idx === 0 ? report.type_of_record : "",
+          period,
+          idx === 0 ? noOfPages : "",
+          idx === 0 ? report.role : "",
+        ];
+        XLSX.utils.sheet_add_aoa(worksheet, [row], { origin: "A" + currentRow });
         currentRow++;
-
-        periods.forEach((period, idx) => {
-          const pages = idx === 0 ? noOfPages : "";
-          const subRow = ["", "", period, pages, ""];
-          XLSX.utils.sheet_add_aoa(worksheet, [subRow], { origin: "A" + currentRow });
-          currentRow++;
-        });
-      } else {
-        const singleRow = [reportIndex++, report.type_of_record, periods[0], noOfPages, report.role];
-        XLSX.utils.sheet_add_aoa(worksheet, [singleRow], { origin: "A" + currentRow });
-        currentRow++;
-      }
-
-      if (noOfPages !== "N/A") {
-        totalPages += Number(noOfPages) || 0;
-      }
+        if (idx === 0) totalPages += noOfPages;
+      });
     });
 
     applyStyles(worksheet, 6, currentRow - 1, tableHeader.length);
@@ -669,6 +652,7 @@ export default function AdminPage() {
     XLSX.utils.book_append_sheet(workbook, worksheet, `${monthName}_${year}_Report`);
     XLSX.writeFile(workbook, `${monthName}_${year}_Report.xlsx`);
   }
+  
 
   function generateRoleReport(periodType: "monthly" | "yearly", role: string) {
     if (periodType === "monthly" && (!summaryMonth || !summaryYear)) {
@@ -743,25 +727,23 @@ export default function AdminPage() {
     let reportIndex: number = 1;
     let totalPages: number = 0;
 
-    Object.entries(groupedReports).forEach(([type, { periods }]) => {
-      if (periods.length > 1) {
-        const mainRow = [reportIndex++, type, "", ""];
-        XLSX.utils.sheet_add_aoa(worksheet, [mainRow], { origin: "A" + currentRow });
-        currentRow++;
+    filteredReports.forEach((report) => {
+      const periods = report.period_covered
+        ? report.period_covered.split(',').map((p) => p.trim())
+        : [""];
+      const noOfPages = report.no_of_pages ?? 0;
 
-        periods.forEach((p, idx) => {
-          const pages = idx === 0 ? p.pages : "";
-          totalPages += idx === 0 ? p.pages : 0;
-          const subRow = ["", "", p.period, pages];
-          XLSX.utils.sheet_add_aoa(worksheet, [subRow], { origin: "A" + currentRow });
-          currentRow++;
-        });
-      } else {
-        const singleRow = [reportIndex++, type, periods[0].period, periods[0].pages];
-        totalPages += periods[0].pages;
-        XLSX.utils.sheet_add_aoa(worksheet, [singleRow], { origin: "A" + currentRow });
+      periods.forEach((period, idx) => {
+        const row = [
+          idx === 0 ? reportIndex++ : "",
+          idx === 0 ? report.type_of_record : "",
+          period,
+          idx === 0 ? noOfPages : "",
+        ];
+        XLSX.utils.sheet_add_aoa(worksheet, [row], { origin: "A" + currentRow });
         currentRow++;
-      }
+        if (idx === 0) totalPages += noOfPages;
+      });
     });
 
     applyStyles(worksheet, 6, currentRow - 1, tableHeader.length);
@@ -802,9 +784,13 @@ export default function AdminPage() {
       {
         label: `Total Pages (Year ${currentYear})`,
         data: uniqueRoles.map((role) =>
-          yearlyReports
-            .filter((r) => r.role.toUpperCase() === role.toUpperCase())
-            .reduce((sum, r) => sum + r.no_of_pages, 0)
+          reports
+            .filter(
+              (r) =>
+                r.role.toUpperCase() === role.toUpperCase() &&
+                new Date(r.created_at).getFullYear() === parseInt(currentYear)
+            )
+            .reduce((sum, r) => sum + (r.no_of_pages || 0), 0)
         ),
         backgroundColor: ["#003087", "#C1272D", "#FFD700", "#00A86B", "#8B008B"],
         borderColor: ["#002060", "#a12025", "#e6c200", "#008B5D", "#6A006A"],
@@ -842,66 +828,92 @@ export default function AdminPage() {
     },
   };
 
-  const monthlyChartData = () => {
-    const filteredReports = reports.filter((r) => {
-      const reportDate = new Date(r.created_at);
-      return (
-        r.role.toUpperCase() === summaryRole.toUpperCase() &&
-        reportDate.getFullYear() === parseInt(summaryYear) &&
-        reportDate.getMonth() + 1 === parseInt(summaryMonth)
-      );
-    });
+    const monthlyChartData = () => {
+      const filteredReports = reports.filter((r) => {
+        const reportDate = new Date(r.created_at);
+        return (
+          r.role.toUpperCase() === summaryRole.toUpperCase() &&
+          reportDate.getFullYear() === parseInt(summaryYear) &&
+          reportDate.getMonth() + 1 === parseInt(summaryMonth)
+        );
+      });
 
-    return {
-      labels: [...new Set(filteredReports.map((r) => r.type_of_record))],
-      datasets: [
-        {
-          label: `Total Pages (${new Date(
+      return {
+        labels: [...new Set(filteredReports.map((r) => truncateLabel(r.type_of_record, 20)))],
+        datasets: [
+          {
+            label: `Total Pages (${new Date(
+              `${summaryYear}-${summaryMonth}-01`
+            ).toLocaleString("default", { month: "long" })} ${summaryYear})`,
+            data: [...new Set(filteredReports.map((r) => r.type_of_record))].map((type) =>
+              filteredReports
+                .filter((r) => r.type_of_record === type)
+                .reduce((sum, r) => sum + r.no_of_pages, 0)
+            ),
+            backgroundColor: "#003087",
+            borderColor: "#002060",
+            borderWidth: 1,
+          },
+        ],
+      };
+    };
+
+    const monthlyChartOptions = {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: "top" as const,
+          labels: {
+            font: {
+              size: 10, // Smaller font for mobile
+            },
+          },
+        },
+        title: {
+          display: true,
+          text: `Total Pages per Record Type (${new Date(
             `${summaryYear}-${summaryMonth}-01`
           ).toLocaleString("default", { month: "long" })} ${summaryYear})`,
-          data: [...new Set(filteredReports.map((r) => r.type_of_record))].map((type) =>
-            filteredReports
-              .filter((r) => r.type_of_record === type)
-              .reduce((sum, r) => sum + r.no_of_pages, 0)
-          ),
-          backgroundColor: "#003087",
-          borderColor: "#002060",
-          borderWidth: 1,
+          font: {
+            size: 14, // Smaller title font for mobile
+          },
         },
-      ],
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          title: {
+            display: true,
+            text: "Number of Pages",
+            font: {
+              size: 12,
+            },
+          },
+          ticks: {
+            font: {
+              size: 10,
+            },
+          },
+        },
+        x: {
+          title: {
+            display: true,
+            text: "Type of Record",
+            font: {
+              size: 12,
+            },
+          },
+          ticks: {
+            font: {
+              size: 10,
+            },
+            maxRotation: 45, // Rotate labels for better fit
+            minRotation: 45,
+          },
+        },
+      },
     };
-  };
-
-  const monthlyChartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        position: "top" as const,
-      },
-      title: {
-        display: true,
-        text: `Total Pages per Record Type (${new Date(
-          `${summaryYear}-${summaryMonth}-01`
-        ).toLocaleString("default", { month: "long" })} ${summaryYear})`,
-      },
-    },
-    scales: {
-      y: {
-        beginAtZero: true,
-        title: {
-          display: true,
-          text: "Number of Pages",
-        },
-      },
-      x: {
-        title: {
-          display: true,
-          text: "Type of Record",
-        },
-      },
-    },
-  };
 
   const years = Array.from({ length: 11 }, (_, i) => (parseInt(currentYear) - 5 + i).toString());
 
@@ -958,8 +970,8 @@ return (
     <Toaster position="top-right" />
 
     {/* Desktop Floating Navigation Menu */}
-    {!showCategoriesView && !showDeleteModal && !showPendingModal && !viewingDepartmentReport && (
-      <div className="hidden md:block fixed top-20 left-[calc(50%-750px)] w-48 bg-white shadow-lg rounded-lg z-50 max-h-[calc(100vh-4rem)] overflow-y-auto">
+    {!showCategoriesView && !showDeleteModal && !showPendingModal && !viewingDepartmentReport && !viewReport && !showYearlyModal && !showMonthlySummary && !activeSlider && (
+  <div className="hidden md:block fixed top-20 left-[calc(50%-750px)] w-48 bg-white shadow-lg rounded-lg z-50 max-h-[calc(100vh-4rem)] overflow-y-auto">
         <div className="p-3">
           <h3 className="text-sm font-bold text-[#003087] mb-3 font-['Poppins']">Navigation</h3>
           <nav className="space-y-1">
@@ -1120,7 +1132,7 @@ return (
             </h1>
             {user && (
               <p className="text-xs sm:text-sm text-gray-600">
-                Role: <span className="font-medium text-[#003087]">{user.role}</span>
+                User: <span className="font-medium text-[#003087]">{user.role}</span>
               </p>
             )}
           </div>
@@ -1142,6 +1154,17 @@ return (
               </span>
             )}
           </div>
+
+          {!viewReport && !showPendingModal && !showYearlyModal && !showMonthlySummary && !showDeleteModal && !activeSlider && (
+            <a
+              href={ADMIN_MANUAL_LINK}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="py-1 px-2 sm:py-2 sm:px-4 bg-[#00A86B] text-white rounded hover:bg-[#008B5D] transition-colors font-medium text-xs sm:text-sm text-center"
+            >
+              View Admin Manual
+            </a>
+          )}
 
           <button
             onClick={() => setActiveSlider("users")}
@@ -1714,7 +1737,7 @@ return (
                       No. of Pages
                     </th>
                     <th className="p-1 sm:p-2 text-center w-[80px] sm:w-[100px]">
-                      Role
+                      Division
                     </th>
                   </tr>
                 </thead>
