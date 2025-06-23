@@ -208,7 +208,7 @@ export default function RegistrationPage(): React.ReactElement {
           </div>
           <div>
             <label htmlFor="role" className="block mb-1 text-sm font-medium text-[#003087]">
-              Role
+              User
             </label>
             <input
               type="text"
@@ -217,7 +217,7 @@ export default function RegistrationPage(): React.ReactElement {
               className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[#003087] transition-colors text-[#003087] text-sm sm:text-base placeholder-gray-400"
               value={role}
               onChange={(e) => setRole(e.target.value)}
-              placeholder="Enter your role (e.g., Manager)"
+              placeholder="Enter your role (e.g., LSD or MSD)"
               aria-required="true"
             />
           </div>
