@@ -1324,7 +1324,7 @@ return (
                   No.
                 </th>
                 <th className="p-1 sm:p-2 text-left w-[80px] sm:w-[100px]">
-                  Role
+                  Division
                 </th>
                 <th className="p-1 sm:p-2 text-left w-[150px] sm:w-[200px]">
                   Category
