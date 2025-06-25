@@ -1,185 +1,205 @@
+'use client';
 
-'use client'
+import { useState, useEffect, FormEvent } from 'react';
+import { useRouter } from 'next/navigation';
+import Image from 'next/image';
+import { supabase } from './supbase';
+import * as XLSX from 'xlsx';
+import { Bar } from 'react-chartjs-2';
+import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend } from 'chart.js';
+import toast, { Toaster } from 'react-hot-toast';
 
-import { useState, useEffect, FormEvent } from 'react'
-import { useRouter } from 'next/navigation'
-import Image from 'next/image'
-import { supabase } from './supbase'
-import * as XLSX from 'xlsx'
-import { Bar } from 'react-chartjs-2'
-import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend } from 'chart.js'
-import toast, { Toaster } from 'react-hot-toast'
+ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
-
-type User = { id: string; username: string; role: string }
-type Report = { id: string; type_of_record: string; period_covered: string; no_of_pages: number; created_at?: string }
-type Category = { id: number; role: string; category: string }
+type User = { id: string; username: string; role: string };
+type Report = { id: string; type_of_record: string; period_covered: string; no_of_pages: number; created_at?: string };
+type Category = { id: number; role: string; category: string };
 
 export default function InputPage() {
-  const router = useRouter()
-  const [user, setUser] = useState<User | null>(null)
-  const [typeOfRecord, setTypeOfRecord] = useState('')
-  const [customType, setCustomType] = useState('')
-  const [periodCovered, setPeriodCovered] = useState('')
-  const [noOfPages, setNoOfPages] = useState(0)
-  const [reports, setReports] = useState<Report[]>([])
-  const [viewReport, setViewReport] = useState<Report | null>(null)
-  const [editReport, setEditReport] = useState<Report | null>(null)
-  const [showMonthlySummary, setShowMonthlySummary] = useState(false)
-  const [showYearlySummary, setShowYearlySummary] = useState(false)
-  const [showSemestralSummary, setShowSemestralSummary] = useState(false)
-  const [categories, setCategories] = useState<string[]>([])
-  const [selectedMonth, setSelectedMonth] = useState((new Date().getMonth() + 1).toString())
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString())
-  const [showDeleteModal, setShowDeleteModal] = useState(false)
-  const [reportToDelete, setReportToDelete] = useState<string | null>(null)
-  const [searchTerm, setSearchTerm] = useState('')
+  const router = useRouter();
+  const [user, setUser] = useState<User | null>(null);
+  const [typeOfRecord, setTypeOfRecord] = useState('');
+  const [customType, setCustomType] = useState('');
+  const [periodCovered, setPeriodCovered] = useState('');
+  const [noOfPages, setNoOfPages] = useState(0);
+  const [reports, setReports] = useState<Report[]>([]);
+  const [viewReport, setViewReport] = useState<Report | null>(null);
+  const [editReport, setEditReport] = useState<Report | null>(null);
+  const [showMonthlySummary, setShowMonthlySummary] = useState(false);
+  const [showYearlySummary, setShowYearlySummary] = useState(false);
+  const [showSemestralSummary, setShowSemestralSummary] = useState(false);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [selectedMonth, setSelectedMonth] = useState((new Date().getMonth() + 1).toString());
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [reportToDelete, setReportToDelete] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const currentDate = new Date('2025-06-25T09:55:00-07:00'); // Set to 09:55 AM PST, June 25, 2025
+  const currentMonth = currentDate.getMonth() + 1;
+  const currentYear = currentDate.getFullYear();
+  const monthName = currentDate.toLocaleString('default', { month: 'long' });
 
   useEffect(() => {
-    const stored = localStorage.getItem('scanflow360_user')
+    const stored = localStorage.getItem('scanflow360_user');
     if (!stored) {
-      router.replace('/')
-      return
+      router.replace('/');
+      return;
     }
-    const parsedUser = JSON.parse(stored)
-    setUser(parsedUser)
-    if (parsedUser && parsedUser.role !== "ADMIN") {
-      fetchCategories(parsedUser.role)
+    const parsedUser = JSON.parse(stored);
+    setUser(parsedUser);
+    if (parsedUser && parsedUser.role !== 'ADMIN') {
+      fetchCategories(parsedUser.role);
     } else {
-      router.replace('/')
-      toast.error('Access denied: Non-admin users only', { duration: 3000 })
+      router.replace('/');
+      toast.error('Access denied: Non-admin users only', { duration: 3000 });
     }
-  }, [router])
+  }, [router]);
 
   useEffect(() => {
-    if (user && user.role !== "ADMIN") {
-      fetchCategories(user.role)
-      fetchReports()
+    if (user && user.role !== 'ADMIN') {
+      fetchCategories(user.role);
+      fetchReports();
+      // Real-time subscription
+      const reportsSubscription = supabase
+        .channel('custom-all-channel')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'monthly_reports1' }, () => fetchReports())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'record_categories' }, () => fetchCategories(user.role))
+        .subscribe();
+      return () => {
+        supabase.removeChannel(reportsSubscription);
+      };
     }
-  }, [user])
+  }, [user]);
 
   async function fetchCategories(role: string) {
-    toast('Fetching categories...', { duration: 3000 })
-    const { data, error } = await supabase
-      .from('record_categories')
-      .select('category')
-      .eq('role', role.toUpperCase())
+    const toastId = toast.loading('Fetching categories...', { duration: 3000 });
+    try {
+      const { data, error } = await supabase
+        .from('record_categories')
+        .select('category')
+        .eq('role', role.toUpperCase());
 
-    if (error) {
-      toast(`Error fetching categories: ${error.message}`, { duration: 3000 })
-      return
+      if (error) throw error;
+      const categoryList = data?.map((item: { category: string }) => item.category) || [];
+      setCategories([...categoryList, 'Other']);
+      toast.success('Categories loaded successfully', { id: toastId, duration: 3000 });
+    } catch (error) {
+      const errorMsg = (error instanceof Error) ? error.message : String(error);
+      toast.error(`Error fetching categories: ${errorMsg}`, { id: toastId, duration: 3000 });
     }
-
-    const categoryList = data?.map((item: { category: string }) => item.category) || []
-    setCategories([...categoryList, 'Other'])
-    toast('Categories loaded successfully', { duration: 3000 })
   }
 
   async function fetchReports() {
-    if (!user) return
-    const toastId = toast.loading('Fetching reports...', { duration: 3000 })
+    if (!user) return;
+    const toastId = toast.loading('Fetching reports...', { duration: 3000 });
     try {
       const { data, error } = await supabase
         .from('monthly_reports1')
         .select('id, type_of_record, period_covered, no_of_pages, created_at')
         .eq('useriud', user.id)
-        .order('created_at', { ascending: false })
-      if (error) throw error
-      setReports(data || [])
-      toast.success('Reports loaded successfully', { id: toastId, duration: 3000 })
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      setReports(data || []);
+      toast.success('Reports loaded successfully', { id: toastId, duration: 3000 });
     } catch (error) {
-      const errorMsg = (error instanceof Error) ? error.message : String(error)
-      toast.error(`Error fetching reports: ${errorMsg}`, { id: toastId, duration: 3000 })
+      const errorMsg = (error instanceof Error) ? error.message : String(error);
+      toast.error(`Error fetching reports: ${errorMsg}`, { id: toastId, duration: 3000 });
     }
   }
 
   async function handleSubmit(e: FormEvent) {
-    e.preventDefault()
-    if (!typeOfRecord) return toast.error('Select a type of record', { duration: 3000 })
-    if (!periodCovered) return toast.error('Enter period covered', { duration: 3000 })
-    if (typeOfRecord === 'Other' && !customType) return toast.error('Enter a custom type of record', { duration: 3000 })
+    e.preventDefault();
+    if (!typeOfRecord) return toast.error('Select a type of record', { duration: 3000 });
+    if (!periodCovered) return toast.error('Enter period covered', { duration: 3000 });
+    if (typeOfRecord === 'Other' && !customType) return toast.error('Enter a custom type of record', { duration: 3000 });
 
-    const finalType = typeOfRecord === 'Other' ? customType : typeOfRecord
-    const toastId = toast.loading('Saving report...', { duration: 3000 })
+    const finalType = typeOfRecord === 'Other' ? customType : typeOfRecord;
+    const toastId = toast.loading('Saving report...', { duration: 3000 });
     try {
       const { error } = await supabase.from('monthly_reports1').upsert({
         useriud: user!.id,
         type_of_record: finalType,
         period_covered: periodCovered,
         no_of_pages: noOfPages,
-      })
-      if (error) throw error
-      toast.success('Report saved successfully', { id: toastId, duration: 3000 })
-      setTypeOfRecord('')
-      setCustomType('')
-      setPeriodCovered('')
-      setNoOfPages(0)
-      fetchReports()
+      });
+      if (error) throw error;
+      toast.success('Report saved successfully', { id: toastId, duration: 3000 });
+      setTypeOfRecord('');
+      setCustomType('');
+      setPeriodCovered('');
+      setNoOfPages(0);
+      fetchReports();
     } catch (error) {
-      const errorMsg = (error instanceof Error) ? error.message : String(error)
-      toast.error(`Error saving report: ${errorMsg}`, { id: toastId, duration: 3000 })
+      const errorMsg = (error instanceof Error) ? error.message : String(error);
+      toast.error(`Error saving report: ${errorMsg}`, { id: toastId, duration: 3000 });
     }
   }
 
   async function handleEditSubmit(e: FormEvent) {
-    e.preventDefault()
-    if (!editReport) return
-    if (!editReport.type_of_record) return toast.error('Select a type of record', { duration: 3000 })
-    if (!editReport.period_covered) return toast.error('Enter period covered', { duration: 3000 })
-    if (editReport.type_of_record === 'Other' && !customType) return toast.error('Enter a custom type of record', { duration: 3000 })
+    e.preventDefault();
+    if (!editReport) return;
+    if (!editReport.type_of_record) return toast.error('Select a type of record', { duration: 3000 });
+    if (!editReport.period_covered) return toast.error('Enter period covered', { duration: 3000 });
+    if (editReport.type_of_record === 'Other' && !customType) return toast.error('Enter a custom type of record', { duration: 3000 });
 
-    const finalType = editReport.type_of_record === 'Other' ? customType : editReport.type_of_record
-    const toastId = toast.loading('Updating report...', { duration: 3000 })
+    const finalType = editReport.type_of_record === 'Other' ? customType : editReport.type_of_record;
+    const toastId = toast.loading('Updating report...', { duration: 3000 });
     try {
       const { error } = await supabase.from('monthly_reports1').update({
         type_of_record: finalType,
         period_covered: editReport.period_covered,
         no_of_pages: editReport.no_of_pages,
-      }).eq('id', editReport.id)
-      if (error) throw error
-      toast.success('Report updated successfully', { id: toastId, duration: 3000 })
-      setEditReport(null)
-      setCustomType('')
-      fetchReports()
+      }).eq('id', editReport.id);
+      if (error) throw error;
+      toast.success('Report updated successfully', { id: toastId, duration: 3000 });
+      setEditReport(null);
+      setCustomType('');
+      fetchReports();
     } catch (error) {
-      const errorMsg = (error instanceof Error) ? error.message : String(error)
-      toast.error(`Error updating report: ${errorMsg}`, { id: toastId, duration: 3000 })
+      const errorMsg = (error instanceof Error) ? error.message : String(error);
+      toast.error(`Error updating report: ${errorMsg}`, { id: toastId, duration: 3000 });
     }
   }
 
   async function handleDelete(id: string) {
-    const toastId = toast.loading('Deleting report...', { duration: 3000 })
+    const toastId = toast.loading('Deleting report...', { duration: 3000 });
     try {
-      const { error } = await supabase.from('monthly_reports1').delete().eq('id', id)
-      if (error) throw error
-      toast.success('Report deleted successfully', { id: toastId, duration: 3000 })
-      fetchReports()
-      setShowDeleteModal(false)
-      setReportToDelete(null)
+      const { error } = await supabase.from('monthly_reports1').delete().eq('id', id);
+      if (error) throw error;
+      toast.success('Report deleted successfully', { id: toastId, duration: 3000 });
+      fetchReports();
+      setShowDeleteModal(false);
+      setReportToDelete(null);
     } catch (error) {
-      const errorMsg = (error instanceof Error) ? error.message : String(error)
-      toast.error(`Error deleting report: ${errorMsg}`, { id: toastId, duration: 3000 })
+      const errorMsg = (error instanceof Error) ? error.message : String(error);
+      toast.error(`Error deleting report: ${errorMsg}`, { id: toastId, duration: 3000 });
     }
   }
 
   function logout() {
-    const toastId = toast.loading('Logging out...', { duration: 3000 })
-    localStorage.removeItem('scanflow360_user')
-    router.replace('/')
-    toast.success('Logged out successfully', { id: toastId, duration: 3000 })
+    const toastId = toast.loading('Logging out...', { duration: 3000 });
+    localStorage.removeItem('scanflow360_user');
+    router.replace('/');
+    toast.success('Logged out successfully', { id: toastId, duration: 3000 });
   }
 
   function truncateRecordName(name: string, maxLength: number = 12): string {
-    if (name.length <= maxLength) return name
-    return `${name.substring(0, maxLength - 3)}...`
+    return name.length <= maxLength ? name : `${name.substring(0, maxLength - 3)}...`;
   }
 
-  function applyStyles(worksheet: XLSX.WorkSheet, startRow: number, endRow: number, numCols: number, isHeader: boolean = false, centerText: boolean = false) {
+  function applyStyles(
+    worksheet: XLSX.WorkSheet,
+    startRow: number,
+    endRow: number,
+    numCols: number,
+    isHeader: boolean = false,
+    centerText: boolean = false
+  ) {
     for (let row = startRow; row <= endRow; row++) {
       for (let col = 0; col < numCols; col++) {
-        const cellRef = XLSX.utils.encode_cell({ r: row, c: col })
-        if (!worksheet[cellRef]) continue
+        const cellRef = XLSX.utils.encode_cell({ r: row, c: col });
+        if (!worksheet[cellRef]) continue;
         worksheet[cellRef].s = {
           border: {
             top: { style: 'thin' },
@@ -187,237 +207,206 @@ export default function InputPage() {
             left: { style: 'thin' },
             right: { style: 'thin' },
           },
-          alignment: { 
-            horizontal: centerText ? 'center' : 'left', 
+          alignment: {
+            horizontal: centerText ? 'center' : 'left',
             vertical: 'center',
             wrapText: true,
           },
           font: isHeader ? { bold: true } : undefined,
-        }
+        };
       }
     }
   }
 
   function generateReport(periodType: 'monthly' | 'semestral' | 'yearly') {
-    const currentDate = new Date()
-    const currentMonth = currentDate.getMonth() + 1
-    const currentYear = currentDate.getFullYear()
-    let reportTitle: string
-    let filteredReports: Report[]
-    let periodName: string
+    let reportTitle: string;
+    let filteredReports: Report[];
+    let periodName: string;
+    const currentMonth = currentDate.getMonth() + 1;
+    const currentYear = currentDate.getFullYear();
 
     if (periodType === 'monthly') {
-      reportTitle = `the month of ${currentDate.toLocaleString('default', { month: 'long' })} ${currentYear}`
-      periodName = `${currentDate.toLocaleString('default', { month: 'long' })}_${currentYear}`
+      reportTitle = `the month of ${monthName} ${currentYear}`;
+      periodName = `${monthName}_${currentYear}`;
       filteredReports = reports.filter((report) => {
-        if (!report.created_at) return false
-        const reportDate = new Date(report.created_at)
-        return reportDate.getMonth() + 1 === currentMonth && reportDate.getFullYear() === currentYear
-      })
+        if (!report.created_at) return false;
+        const reportDate = new Date(report.created_at);
+        return reportDate.getMonth() + 1 === currentMonth && reportDate.getFullYear() === currentYear;
+      });
     } else if (periodType === 'semestral') {
-      const semester = parseInt(String(currentMonth)) <= 6 ? 'First' : 'Second'
-      reportTitle = `${semester} Semester ${selectedYear}`
-      periodName = `${semester}_Semester_${selectedYear}`
+      const semester = parseInt(selectedMonth) <= 6 ? 'First' : 'Second';
+      reportTitle = `${semester} Semester ${selectedYear}`;
+      periodName = `${semester}_Semester_${selectedYear}`;
       filteredReports = reports.filter((report) => {
-        if (!report.created_at) return false
-        const reportDate = new Date(report.created_at)
+        if (!report.created_at) return false;
+        const reportDate = new Date(report.created_at);
         return (
           reportDate.getFullYear() === parseInt(selectedYear) &&
-          ((semester === 'First' && reportDate.getMonth() + 1 <= 6) ||
-           (semester === 'Second' && reportDate.getMonth() + 1 > 6))
-        )
-      })
+          ((semester === 'First' && reportDate.getMonth() + 1 <= 6) || (semester === 'Second' && reportDate.getMonth() + 1 > 6))
+        );
+      });
     } else {
-      reportTitle = `for the Year ${selectedYear}`
-      periodName = `Year_${selectedYear}`
+      reportTitle = `for the Year ${selectedYear}`;
+      periodName = `Year_${selectedYear}`;
       filteredReports = reports.filter((report) => {
-        if (!report.created_at) return false
-        const reportDate = new Date(report.created_at)
-        return reportDate.getFullYear() === parseInt(selectedYear)
-      })
+        if (!report.created_at) return false;
+        const reportDate = new Date(report.created_at);
+        return reportDate.getFullYear() === parseInt(selectedYear);
+      });
     }
 
     if (filteredReports.length === 0) {
-      toast.error(`No reports found for ${reportTitle}`, { duration: 3000 })
-      return
+      toast.error(`No reports found for ${reportTitle}`, { duration: 3000 });
+      return;
     }
 
-    const worksheet: XLSX.WorkSheet = XLSX.utils.aoa_to_sheet([])
-    XLSX.utils.sheet_add_aoa(worksheet, [[user?.role.toUpperCase()]], { origin: "B1" })
-    XLSX.utils.sheet_add_aoa(worksheet, [[reportTitle]], { origin: "B2" })
+    const worksheet: XLSX.WorkSheet = XLSX.utils.aoa_to_sheet([]);
+    XLSX.utils.sheet_add_aoa(worksheet, [[user?.role.toUpperCase()]], { origin: 'B1' });
+    XLSX.utils.sheet_add_aoa(worksheet, [[reportTitle]], { origin: 'B2' });
 
     worksheet['!merges'] = [
       { s: { r: 0, c: 1 }, e: { r: 0, c: 3 } },
       { s: { r: 1, c: 1 }, e: { r: 1, c: 3 } },
-    ]
+    ];
 
-    applyStyles(worksheet, 0, 1, 4, true, true)
+    applyStyles(worksheet, 0, 1, 4, true, true);
 
-    let currentRow: number = 4
-    const tableHeader: string[] = ["No.", "Type of Record", "Period Covered", "No. of Pages"]
-    XLSX.utils.sheet_add_aoa(worksheet, [tableHeader], { origin: "A" + currentRow })
-    applyStyles(worksheet, currentRow - 1, currentRow - 1, tableHeader.length, true)
+    let currentRow: number = 4;
+    const tableHeader: string[] = ['No.', 'Type of Record', 'Period Covered', 'No. of Pages'];
+    XLSX.utils.sheet_add_aoa(worksheet, [tableHeader], { origin: 'A' + currentRow });
+    applyStyles(worksheet, currentRow - 1, currentRow - 1, tableHeader.length, true);
 
-    currentRow++
+    currentRow++;
 
-    let reportIndex: number = 1
-    let totalPages: number = 0
+    let reportIndex: number = 1;
+    let totalPages: number = 0;
 
     filteredReports.forEach((report) => {
-      const row = [reportIndex++, report.type_of_record, report.period_covered, report.no_of_pages]
-      totalPages += report.no_of_pages
-      XLSX.utils.sheet_add_aoa(worksheet, [row], { origin: "A" + currentRow })
-      currentRow++
-    })
+      const row = [reportIndex++, report.type_of_record, report.period_covered, report.no_of_pages];
+      totalPages += report.no_of_pages;
+      XLSX.utils.sheet_add_aoa(worksheet, [row], { origin: 'A' + currentRow });
+      currentRow++;
+    });
 
-    applyStyles(worksheet, 4, currentRow - 1, tableHeader.length)
+    applyStyles(worksheet, 4, currentRow - 1, tableHeader.length);
 
-    const totalRow = ["", "TOTAL NO. OF PAGES", "", totalPages]
-    XLSX.utils.sheet_add_aoa(worksheet, [totalRow], { origin: "A" + currentRow })
-    applyStyles(worksheet, currentRow - 1, currentRow - 1, tableHeader.length, true)
+    const totalRow = ['', 'TOTAL NO. OF PAGES', '', totalPages];
+    XLSX.utils.sheet_add_aoa(worksheet, [totalRow], { origin: 'A' + currentRow });
+    applyStyles(worksheet, currentRow - 1, currentRow - 1, tableHeader.length, true);
 
-    worksheet['!cols'] = [
-      { wch: 5 },
-      { wch: 50 },
-      { wch: 30 },
-      { wch: 15 },
-    ]
+    worksheet['!cols'] = [{ wch: 5 }, { wch: 50 }, { wch: 30 }, { wch: 15 }];
 
-    const workbook = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(workbook, worksheet, `${periodName}_Report`)
-    XLSX.writeFile(workbook, `${periodName}_Report.xlsx`)
-    toast.success(`Report generated: ${periodName}`, { duration: 3000 })
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, `${periodName}_Report`);
+    XLSX.writeFile(workbook, `${periodName}_Report.xlsx`);
+    toast.success(`Report generated: ${periodName}`, { duration: 3000 });
   }
 
   function viewMonthlySummary() {
-    setShowMonthlySummary(true)
-    setShowYearlySummary(false)
-    setShowSemestralSummary(false)
+    setShowMonthlySummary(true);
+    setShowYearlySummary(false);
+    setShowSemestralSummary(false);
   }
 
   function viewYearlySummary() {
-    setShowYearlySummary(true)
-    setShowMonthlySummary(false)
-    setShowSemestralSummary(false)
+    setShowYearlySummary(true);
+    setShowMonthlySummary(false);
+    setShowSemestralSummary(false);
   }
 
   function viewSemestralSummary() {
-    setShowSemestralSummary(true)
-    setShowMonthlySummary(false)
-    setShowYearlySummary(false)
+    setShowSemestralSummary(true);
+    setShowMonthlySummary(false);
+    setShowYearlySummary(false);
   }
 
-  const currentDate = new Date()
-  const monthName = currentDate.toLocaleString('default', { month: 'long' })
-  const currentMonth = currentDate.getMonth() + 1
-  const currentYear = currentDate.getFullYear()
-
   const currentMonthReports = reports.filter((report) => {
-    if (!report.created_at) return false
-    const reportDate = new Date(report.created_at)
-    return (
-      reportDate.getMonth() + 1 === currentMonth &&
-      reportDate.getFullYear() === currentYear
-    )
-  })
+    if (!report.created_at) return false;
+    const reportDate = new Date(report.created_at);
+    return reportDate.getMonth() + 1 === currentMonth && reportDate.getFullYear() === currentYear;
+  });
 
   const filteredReportsMonth = reports.filter((report) => {
-    if (!report.created_at) return false
-    const reportDate = new Date(report.created_at)
+    if (!report.created_at) return false;
+    const reportDate = new Date(report.created_at);
     return (
       reportDate.getMonth() + 1 === parseInt(selectedMonth) &&
       reportDate.getFullYear() === parseInt(selectedYear)
-    )
-  })
+    );
+  });
 
   const yearlyReports = reports.filter((report) => {
-    if (!report.created_at) return false
-    const reportDate = new Date(report.created_at)
-    return reportDate.getFullYear() === parseInt(selectedYear)
-  })
+    if (!report.created_at) return false;
+    const reportDate = new Date(report.created_at);
+    return reportDate.getFullYear() === parseInt(selectedYear);
+  });
 
   const semestralReports = reports.filter((report) => {
-    if (!report.created_at) return false
-    const reportDate = new Date(report.created_at)
-    const semester = parseInt(selectedMonth) <= 6 ? 'First' : 'Second'
+    if (!report.created_at) return false;
+    const reportDate = new Date(report.created_at);
+    const semester = parseInt(selectedMonth) <= 6 ? 'First' : 'Second';
     return (
       reportDate.getFullYear() === parseInt(selectedYear) &&
-      ((semester === 'First' && reportDate.getMonth() + 1 <= 6) ||
-       (semester === 'Second' && reportDate.getMonth() + 1 > 6))
-    )
-  })
+      ((semester === 'First' && reportDate.getMonth() + 1 <= 6) || (semester === 'Second' && reportDate.getMonth() + 1 > 6))
+    );
+  });
 
   const dailyGroupedReports = currentMonthReports.reduce((acc, report) => {
-    if (!report.created_at) return acc
-    const reportDate = new Date(report.created_at)
+    if (!report.created_at) return acc;
+    const reportDate = new Date(report.created_at);
     const dateKey = reportDate.toLocaleDateString('en-US', {
       month: '2-digit',
       day: '2-digit',
-      year: 'numeric'
-    })
-    if (!acc[dateKey]) acc[dateKey] = {}
-    if (!acc[dateKey][report.type_of_record]) acc[dateKey][report.type_of_record] = 0
-    acc[dateKey][report.type_of_record] += report.no_of_pages
-    return acc
-  }, {} as Record<string, Record<string, number>>)
+      year: 'numeric',
+    });
+    if (!acc[dateKey]) acc[dateKey] = {};
+    if (!acc[dateKey][report.type_of_record]) acc[dateKey][report.type_of_record] = 0;
+    acc[dateKey][report.type_of_record] += report.no_of_pages;
+    return acc;
+  }, {} as Record<string, Record<string, number>>);
 
   const chartData = (reportsData: Report[]) => {
     if (reportsData === currentMonthReports) {
       const dates = Object.keys(dailyGroupedReports).sort((a, b) => {
-        const dateA = new Date(a)
-        const dateB = new Date(b)
-        return dateA.getTime() - dateB.getTime()
-      })
-      const types = [...new Set(currentMonthReports.map(r => r.type_of_record))]
-      const currentDate = new Date().toLocaleDateString('en-US', {
+        const dateA = new Date(a);
+        const dateB = new Date(b);
+        return dateA.getTime() - dateB.getTime();
+      });
+      const types = [...new Set(currentMonthReports.map((r) => r.type_of_record))];
+      const currentDateStr = currentDate.toLocaleDateString('en-US', {
         month: '2-digit',
         day: '2-digit',
-        year: 'numeric'
-      })
-      const updatedLabels = dates.length > 0 ? dates : [currentDate]
+        year: 'numeric',
+      });
+      const updatedLabels = dates.length > 0 ? dates : [currentDateStr];
       return {
         labels: updatedLabels,
         datasets: types.map((type, index) => ({
           label: type,
-          data: updatedLabels.map(date => dailyGroupedReports[date] ? dailyGroupedReports[date][type] || 0 : 0),
+          data: updatedLabels.map((date) => dailyGroupedReports[date] ? dailyGroupedReports[date][type] || 0 : 0),
           backgroundColor: [
-            '#003087',
-            '#0087DC',
-            '#C8102E',
-            '#B39C6F',
-            '#4B5EAA',
-            '#A6192E',
-            '#D4A017',
-            '#6A7281',
-            '#005670',
-            '#E57373',
-            '#90CAF9',
-            '#FBC02D',
-            '#3F51B5',
-            '#D81B60',
-            '#81C784',
+            '#003087', '#0087DC', '#C8102E', '#B39C6F', '#4B5EAA', '#A6192E', '#D4A017', '#6A7281', '#005670',
+            '#E57373', '#90CAF9', '#FBC02D', '#3F51B5', '#D81B60', '#81C784',
           ][index % 15],
           stack: 'Stack',
         })),
-      }
+      };
     }
     return {
-      labels: [...new Set(reportsData.map(r => r.type_of_record))],
+      labels: [...new Set(reportsData.map((r) => r.type_of_record))],
       datasets: [
         {
           label: `Total Pages`,
-          data: [...new Set(reportsData.map(r => r.type_of_record))].map(type =>
-            reportsData
-              .filter(r => r.type_of_record === type)
-              .reduce((sum, r) => sum + r.no_of_pages, 0)
+          data: [...new Set(reportsData.map((r) => r.type_of_record))].map((type) =>
+            reportsData.filter((r) => r.type_of_record === type).reduce((sum, r) => sum + r.no_of_pages, 0)
           ),
           backgroundColor: '#003087',
           borderColor: '#002060',
           borderWidth: 1,
         },
       ],
-    }
-  }
+    };
+  };
 
   const chartOptions = (reportsData: Report[]) => ({
     responsive: true,
@@ -428,47 +417,35 @@ export default function InputPage() {
       },
       title: {
         display: true,
-        text: reportsData === currentMonthReports 
+        text: reportsData === currentMonthReports
           ? `Daily Pages per Record Type (${monthName} ${currentYear})`
           : `Total Pages per Record Type (${showMonthlySummary ? `${months[parseInt(selectedMonth) - 1].label} ${selectedYear}` : showSemestralSummary ? `Semester ${selectedYear}` : `Year ${selectedYear}`})`,
-        font: {
-          size: 12,
-        },
+        font: { size: 12 },
       },
     },
     scales: {
       y: {
         beginAtZero: true,
-        title: {
-          display: true,
-          text: 'Number of Pages',
-          font: {
-            size: 10,
-          },
-        },
+        title: { display: true, text: 'Number of Pages', font: { size: 10 } },
         stacked: reportsData === currentMonthReports,
       },
       x: {
         title: {
           display: true,
           text: reportsData === currentMonthReports ? 'Date' : 'Type of Record',
-          font: {
-            size: 10,
-          },
+          font: { size: 10 },
         },
         ticks: {
-          font: {
-            size: 8,
-          },
-          callback: function(value: string | number) {
-            const label = String(value)
-            return label.length > 10 ? label.substring(0, 7) + '...' : label
+          font: { size: 8 },
+          callback: function (value: string | number) {
+            const label = String(value);
+            return label.length > 10 ? label.substring(0, 7) + '...' : label;
           },
         },
         stacked: reportsData === currentMonthReports,
       },
     },
-  })
+  });
 
   const months = [
     { value: '1', label: 'January' },
@@ -483,14 +460,14 @@ export default function InputPage() {
     { value: '10', label: 'October' },
     { value: '11', label: 'November' },
     { value: '12', label: 'December' },
-  ]
+  ];
 
-  const years = Array.from({ length: 10 }, (_, i) => (new Date().getFullYear() - i).toString())
+  const years = Array.from({ length: 10 }, (_, i) => (currentYear - i).toString());
 
   const filteredSubmittedReports = reports.filter((report) =>
     report.type_of_record.toLowerCase().includes(searchTerm.toLowerCase()) ||
     report.period_covered.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  );
 
   return (
     <div className="min-h-screen bg-[#F5F6F5] flex items-center justify-center p-2 sm:p-4 md:p-6">
@@ -554,8 +531,8 @@ export default function InputPage() {
                 <select
                   value={typeOfRecord}
                   onChange={(e) => {
-                    setTypeOfRecord(e.target.value)
-                    if (e.target.value !== 'Other') setCustomType('')
+                    setTypeOfRecord(e.target.value);
+                    if (e.target.value !== 'Other') setCustomType('');
                   }}
                   className="w-full p-1 sm:p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[#003087] transition-colors text-[#003087] placeholder-gray-500 text-xs sm:text-sm truncate"
                   required
@@ -594,7 +571,7 @@ export default function InputPage() {
                   value={periodCovered}
                   onChange={(e) => setPeriodCovered(e.target.value)}
                   className="w-full p-1 sm:p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[#003087] transition-colors text-black placeholder-gray-500 text-xs sm:text-sm"
-                  placeholder="Enter period covered (e.g., Jan 2025)"
+                  placeholder="Enter period covered (e.g., Jan-Jun 2025)"
                   required
                 />
               </div>
@@ -711,8 +688,8 @@ export default function InputPage() {
                           <div className="flex space-x-2 sm:space-x-3">
                             <button
                               onClick={() => {
-                                setReportToDelete(r.id)
-                                setShowDeleteModal(true)
+                                setReportToDelete(r.id);
+                                setShowDeleteModal(true);
                               }}
                               className="text-[#C1272D] hover:text-[#a12025] font-medium transition-colors text-xs sm:text-sm"
                             >
@@ -749,11 +726,11 @@ export default function InputPage() {
               </h2>
               <p className="text-gray-700 text-xs sm:text-sm">
                 <span className="font-medium text-[#003087]">Type of Record:</span>{' '}
-                <span title={viewReport?.type_of_record}>{truncateRecordName(viewReport?.type_of_record)}</span>
+                {viewReport?.type_of_record}
               </p>
               <p className="text-gray-700 text-xs sm:text-sm">
                 <span className="font-medium text-[#003087]">Period Covered:</span>{' '}
-                <span title={viewReport?.period_covered}>{truncateRecordName(viewReport?.period_covered)}</span>
+                {viewReport?.period_covered}
               </p>
               <p className="text-gray-700 text-sm">
                 <span className="font-medium text-[#003087]">Total Pages:</span>{' '}
@@ -774,7 +751,7 @@ export default function InputPage() {
         )}
 
         {editReport && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-            p-4">
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-2 sm:p-4">
             <div className="bg-white p-2 sm:p-3 md:p-4 rounded-lg shadow-lg w-full max-w-sm sm:max-w-md max-h-[90vh] overflow-y-auto">
               <h2 className="text-sm sm:text-base md:text-lg font-bold text-[#003087] mb-2 sm:mb-3 font-['Poppins']">
                 Edit Report
@@ -787,8 +764,8 @@ export default function InputPage() {
                   <select
                     value={editReport.type_of_record}
                     onChange={(e) => {
-                      setEditReport({ ...editReport, type_of_record: e.target.value })
-                      if (e.target.value !== 'Other') setCustomType('')
+                      setEditReport({ ...editReport, type_of_record: e.target.value });
+                      if (e.target.value !== 'Other') setCustomType('');
                     }}
                     className="w-full p-1 sm:p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#003087] transition-colors text-[#003087] placeholder-gray-500 text-xs sm:text-sm truncate"
                     required
@@ -829,7 +806,7 @@ export default function InputPage() {
                     value={editReport.period_covered}
                     onChange={(e) => setEditReport({ ...editReport, period_covered: e.target.value })}
                     className="w-full p-1 sm:p-2 border border-gray-300 rounded-md text-black placeholder-gray-500 text-xs sm:text-sm"
-                    placeholder="Enter period covered (e.g., Jan 2025)"
+                    placeholder="Enter period covered (e.g., Jan-Jun 2025)"
                     required
                   />
                 </div>
@@ -855,7 +832,7 @@ export default function InputPage() {
                   </button>
                   <button
                     onClick={() => setEditReport(null)}
-                    className="flex-1 py-1 sm:p-2 bg-[#C1272D] text-white rounded-md hover:bg-[#333] transition-colors font-medium text-xs sm:text-sm"
+                    className="flex-1 py-1 sm:p-2 bg-[#C1272D] text-white rounded-md hover:bg-[#a12025] transition-colors font-medium text-xs sm:text-sm"
                   >
                     Cancel
                   </button>
@@ -868,7 +845,7 @@ export default function InputPage() {
         {(showMonthlySummary || showYearlySummary || showSemestralSummary) && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-2 sm:p-4">
             <div className="bg-white p-2 sm:p-3 md:p-4 rounded-lg shadow-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-              <h2 className="text-sm sm:text-base md:text-lg font-bold text-[#003087] font-['Poppins'] mb-2 sm:mb-3 sm:mt-4">
+              <h2 className="text-sm sm:text-base md:text-lg font-bold text-[#003087] font-['Poppins'] mb-2 sm:mb-3">
                 {showMonthlySummary ? 'Monthly Summary' : showSemestralSummary ? 'Semestral Summary' : 'Yearly Summary'}
               </h2>
               {showMonthlySummary && (
@@ -897,6 +874,44 @@ export default function InputPage() {
                   </select>
                 </div>
               )}
+              {showSemestralSummary && (
+                <div className="mb-2 sm:mb-3 flex flex-col sm:flex-row gap-2 sm:gap-3">
+                  <select
+                    value={selectedMonth}
+                    onChange={(e) => setSelectedMonth(e.target.value)}
+                    className="w-full p-1 sm:p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[#003087] text-xs sm:text-sm"
+                  >
+                    <option value="6">First Semester (Jan-Jun)</option>
+                    <option value="12">Second Semester (Jul-Dec)</option>
+                  </select>
+                  <select
+                    value={selectedYear}
+                    onChange={(e) => setSelectedYear(e.target.value)}
+                    className="w-full p-1 sm:p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[#003087] text-xs sm:text-sm"
+                  >
+                    {years.map((year) => (
+                      <option key={year} value={year}>
+                        {year}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {showYearlySummary && (
+                <div className="mb-2 sm:mb-3">
+                  <select
+                    value={selectedYear}
+                    onChange={(e) => setSelectedYear(e.target.value)}
+                    className="w-full p-1 sm:p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[#003087] text-xs sm:text-sm"
+                  >
+                    {years.map((year) => (
+                      <option key={year} value={year}>
+                        {year}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div className="mb-3 sm:mb-4 h-40 sm:h-48 md:h-64">
                 <Bar
                   data={chartData(showMonthlySummary ? filteredReportsMonth : showSemestralSummary ? semestralReports : yearlyReports)}
@@ -909,7 +924,7 @@ export default function InputPage() {
                     <tr className="bg-[#003087] text-white sticky top-0 z-10">
                       <th className="p-1 text-left w-12">No.</th>
                       <th className="p-1 text-left w-24 sm:w-32">Type of Record</th>
-                      <th className="p-1 text-left w-24 sm:w-28">Title</th>
+                      <th className="p-1 text-left w-24 sm:w-28">Period Covered</th>
                       <th className="p-1 text-left w-16 sm:w-20">Total</th>
                       <th className="p-1 text-left w-20 sm:w-24">Date</th>
                     </tr>
@@ -925,7 +940,7 @@ export default function InputPage() {
                             {truncateRecordName(r.type_of_record)}
                           </td>
                           <td className="p-1 truncate text-[#003087]" title={r.period_covered}>
-                            {truncateRecordName(r.period_covered)}
+                            {r.period_covered}
                           </td>
                           <td className="p-1 truncate text-[#003087]" title={String(r.no_of_pages)}>
                             {r.no_of_pages}
@@ -940,10 +955,10 @@ export default function InputPage() {
                       )
                     )}
                     <tr className="font-bold">
-                      <td colSpan={4} className="p-1 text-right text-[#003087]">
+                      <td colSpan={3} className="p-1 text-right text-[#003087]">
                         Total No. of Pages
                       </td>
-                      <td className="p-1 text-[#003087]">
+                      <td colSpan={2} className="p-1 text-[#003087]">
                         {(showMonthlySummary ? filteredReportsMonth : showSemestralSummary ? semestralReports : yearlyReports).reduce(
                           (sum, r) => sum + r.no_of_pages,
                           0
@@ -955,9 +970,9 @@ export default function InputPage() {
               </div>
               <button
                 onClick={() => {
-                  setShowMonthlySummary(false)
-                  setShowYearlySummary(false)
-                  setShowSemestralSummary(false)
+                  setShowMonthlySummary(false);
+                  setShowYearlySummary(false);
+                  setShowSemestralSummary(false);
                 }}
                 className="mt-2 sm:mt-3 w-full py-1 sm:p-2 bg-[#003087] text-white rounded-md hover:bg-[#002060] transition-colors font-medium text-sm"
               >
@@ -968,7 +983,7 @@ export default function InputPage() {
         )}
 
         {showDeleteModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-2 sm:p-4">
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-2 sm:p-4 z-50" style={{ zIndex: 1000 }}>
             <div className="bg-white p-2 sm:p-3 md:p-4 rounded-lg shadow-lg w-full max-w-sm sm:max-w-md max-h-[90vh] overflow-y-auto">
               <h2 className="text-sm sm:text-base md:text-lg font-bold text-[#003087] mb-2 sm:mb-3 font-['Poppins']">
                 Confirm Deletion
@@ -976,7 +991,7 @@ export default function InputPage() {
               <p className="text-gray-700 text-xs sm:text-sm mb-2 sm:mb-3">
                 Are you sure you want to delete the report{' '}
                 <span className="font-medium text-[#003087]" title={reports.find((r) => r.id === reportToDelete)?.type_of_record}>
-                  {truncateRecordName(reports.find((r) => r.id === reportToDelete)?.type_of_record || '')}
+                  {reports.find((r) => r.id === reportToDelete)?.type_of_record || ''}
                 </span>? This action cannot be undone.
               </p>
               <div className="flex space-x-2 sm:space-x-3">
@@ -988,8 +1003,8 @@ export default function InputPage() {
                 </button>
                 <button
                   onClick={() => {
-                    setShowDeleteModal(false)
-                    setReportToDelete(null)
+                    setShowDeleteModal(false);
+                    setReportToDelete(null);
                   }}
                   className="flex-1 py-1 sm:p-2 bg-[#003087] text-white rounded-md hover:bg-[#002060] transition-colors font-medium text-xs sm:text-sm"
                 >
@@ -1001,5 +1016,5 @@ export default function InputPage() {
         )}
       </div>
     </div>
-  )
+  );
 }
