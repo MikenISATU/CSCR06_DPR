@@ -1295,7 +1295,7 @@ return (
             onChange={(e) => setSelectedRole(e.target.value)}
             className="border border-gray-300 rounded p-1 sm:p-2 w-full sm:w-auto text-xs sm:text-sm text-[#003087]"
           >
-            <option value="" disabled>Select Role</option>
+            <option value="" disabled>Select Division</option>
             {uniqueRoles.map((role) => (
               <option key={role} value={role} className="text-[#003087]">
                 {role}
@@ -1444,7 +1444,7 @@ return (
               className="border border-gray-300 rounded p-1 sm:p-2 w-full sm:w-auto text-xs sm:text-sm text-[#003087]"
             >
               <option value="" disabled className="text-gray-500">
-                Select Role
+                Select Division
               </option>
               {uniqueRoles.map((role) => (
                 <option key={role} value={role} className="text-[#003087]">
@@ -1629,7 +1629,7 @@ return (
               {viewReport?.no_of_pages}
             </p>
             <p className="text-gray-700 text-xs sm:text-sm md:text-base">
-              <span className="font-medium text-[#003087]">Role:</span>{" "}
+              <span className="font-medium text-[#003087]">Division:</span>{" "}
               {viewReport?.role}
             </p>
             <button
@@ -1668,7 +1668,7 @@ return (
                     <tr className="bg-[#003087] text-white sticky top-0">
                       <th className="p-1 sm:p-2 text-center w-[50px] sm:w-[40px]">No.</th>
                       <th className="p-1 sm:p-2 text-left w-[120px] sm:w-[100px]">Name</th>
-                      <th className="p-1 sm:p-2 text-left w-[100px] sm:w-[80px]">Role</th>
+                      <th className="p-1 sm:p-2 text-left w-[100px] sm:w-[80px]">Division</th>
                       <th className="p-1 sm:p-2 text-left w-[150px] sm:w-[120px]">Office</th>
                       <th className="p-1 sm:p-2 text-left w-[200px] sm:w-[150px]">Email</th>
                       <th className="p-1 sm:p-2 text-center w-[100px] sm:w-[150px]">Actions</th>
@@ -1990,7 +1990,7 @@ return (
                       {selectedUser.username}
                     </p>
                     <p className="text-gray-700 text-xs sm:text-sm md:text-base">
-                      <span className="font-medium text-[#003087]">Role:</span>{" "}
+                      <span className="font-medium text-[#003087]">Division:</span>{" "}
                       {selectedUser.role}
                     </p>
                     <p className="text-gray-700 text-xs sm:text-sm md:text-base">
