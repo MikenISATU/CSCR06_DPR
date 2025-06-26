@@ -462,7 +462,7 @@ export default function InputPage() {
     { value: '12', label: 'December' },
   ];
 
-  const years = Array.from({ length: 10 }, (_, i) => (currentYear - i).toString());
+  const years = ['2025', '2026', '2027', '2028', '2029', '2030'];
 
   const filteredSubmittedReports = reports.filter((report) =>
     report.type_of_record.toLowerCase().includes(searchTerm.toLowerCase()) ||
