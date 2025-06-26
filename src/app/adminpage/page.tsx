@@ -90,7 +90,7 @@ export default function AdminPage() {
   const [showCategoriesView, setShowCategoriesView] = useState(false);
   const [viewingDepartmentReport, setViewingDepartmentReport] = useState(false);
   const currentYear = new Date().getFullYear().toString();
-  const ADMIN_MANUAL_LINK = "https://drive.google.com/your-public-link-here"; // Replace with actual Google Drive public link
+  const ADMIN_MANUAL_LINK = "https://drive.google.com/file/d/133jDrEXoEGaLUD4bU0eGc6xOcDbQzPYZ/view?usp=sharing_eip_se_dm&ts=685bbaef"; 
 
   useEffect(() => {
     const stored = localStorage.getItem("scanflow360_user");
