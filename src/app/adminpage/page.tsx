@@ -1,5 +1,5 @@
-'use client'
-import { useState, useEffect } from 'react';
+'use client';
+import { useState, useEffect, useMemo } from 'react'; // Added useMemo
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { supabase } from './supbase';
@@ -7,7 +7,6 @@ import { Bar } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend } from 'chart.js';
 import * as XLSX from 'xlsx';
 import toast, { Toaster } from 'react-hot-toast';
-
 
 export const dynamic = "force-dynamic";
 
@@ -42,7 +41,6 @@ function truncateLabel(text: string, maxLength: number): string {
   return text.slice(0, maxLength - 3) + "...";
 }
 
-// Interface for handleNavigation options
 interface NavigationOptions {
   showCategories?: boolean;
   showPending?: boolean;
@@ -50,7 +48,6 @@ interface NavigationOptions {
   viewingReport?: boolean;
   closeMobileMenu?: boolean;
 }
-
 
 export default function AdminPage() {
   const router = useRouter();
@@ -90,7 +87,13 @@ export default function AdminPage() {
   const [showCategoriesView, setShowCategoriesView] = useState(false);
   const [viewingDepartmentReport, setViewingDepartmentReport] = useState(false);
   const currentYear = new Date().getFullYear().toString();
-  const ADMIN_MANUAL_LINK = "https://drive.google.com/file/d/133jDrEXoEGaLUD4bU0eGc6xOcDbQzPYZ/view?usp=sharing_eip_se_dm&ts=685bbaef"; 
+  const ADMIN_MANUAL_LINK = "https://drive.google.com/file/d/133jDrEXoEGaLUD4bU0eGc6xOcDbQzPYZ/view?ts=685bbaef"; 
+
+
+  // Move uniqueRoles inside component with useMemo to prevent recalculation
+  const uniqueRoles = useMemo(() => {
+    return [...new Set(users.map((u) => u.role).filter((r) => r !== "ADMIN"))];
+  }, [users]);
 
   useEffect(() => {
     const stored = localStorage.getItem("scanflow360_user");
@@ -103,16 +106,7 @@ export default function AdminPage() {
     }
   }, [router]);
 
-  useEffect(() => {
-    if (user && user.role === "ADMIN") {
-      fetchReports();
-      fetchCategories();
-      fetchUsers();
-      fetchPendingRegistrations();
-    }
-  }, [user]);
-
-  async function fetchUsers() {
+   async function fetchUsers() {
     const { data, error } = await supabase
     .from("users2")
     .select("id, username, role, name, office, office_head, email_address");
@@ -124,6 +118,20 @@ export default function AdminPage() {
 
     setUsers(data || []);
   }
+
+  useEffect(() => {
+    if (user && user.role === "ADMIN") {
+      async function fetchData() {
+        await fetchUsers(); // Fetch users first to populate uniqueRoles
+        await Promise.all([
+          fetchReports(),
+          fetchCategories(),
+          fetchPendingRegistrations(),
+        ]);
+      }
+      fetchData();
+    }
+  }, [user]);
 
   async function fetchReports() {
     const { data, error } = await supabase
@@ -472,311 +480,320 @@ export default function AdminPage() {
   }
 
   function downloadYearlyReport() {
-    const worksheet: XLSX.WorkSheet = XLSX.utils.aoa_to_sheet([]);
+  const worksheet: XLSX.WorkSheet = XLSX.utils.aoa_to_sheet([]);
 
-    XLSX.utils.sheet_add_aoa(worksheet, [["Civil Service Commission Regional Office VI"]], {
-      origin: "B1",
-    });
-    XLSX.utils.sheet_add_aoa(worksheet, [["DIGITIZATION OF RECORDS"]], { origin: "B2" });
-    XLSX.utils.sheet_add_aoa(worksheet, [[`For the Year ${currentYear}`]], { origin: "B3" });
-    XLSX.utils.sheet_add_aoa(worksheet, [["Target: 100% of Identified Records"]], { origin: "B4" });
+  XLSX.utils.sheet_add_aoa(worksheet, [["Civil Service Commission Regional Office VI"]], {
+    origin: "B1",
+  });
+  XLSX.utils.sheet_add_aoa(worksheet, [["DIGITIZATION OF RECORDS"]], { origin: "B2" });
+  XLSX.utils.sheet_add_aoa(worksheet, [[`For the Year ${currentYear}`]], { origin: "B3" });
+  XLSX.utils.sheet_add_aoa(worksheet, [["Target: 100% of Identified Records"]], { origin: "B4" });
 
-    worksheet["!merges"] = [
-      { s: { r: 0, c: 1 }, e: { r: 0, c: 3 } },
-      { s: { r: 1, c: 1 }, e: { r: 1, c: 3 } },
-      { s: { r: 2, c: 1 }, e: { r: 2, c: 3 } },
-      { s: { r: 3, c: 1 }, e: { r: 3, c: 3 } },
-    ];
+  worksheet["!merges"] = [
+    { s: { r: 0, c: 1 }, e: { r: 0, c: 2 } },
+    { s: { r: 1, c: 1 }, e: { r: 1, c: 2 } },
+    { s: { r: 2, c: 1 }, e: { r: 2, c: 2 } },
+    { s: { r: 3, c: 1 }, e: { r: 3, c: 2 } },
+  ];
 
-    applyStyles(worksheet, 0, 3, 4, true, true);
+  applyStyles(worksheet, 0, 3, 3, true, true);
 
-    let currentRow: number = 6;
-    let totalPagesOverall: number = 0;
+  let currentRow: number = 6;
+  let totalPagesOverall: number = 0;
 
-    const tableHeader: string[] = ["No.", "Type of Record", "Period Covered", "No. of Pages", "Division"];
-    XLSX.utils.sheet_add_aoa(worksheet, [tableHeader], { origin: "A" + currentRow });
-    applyStyles(worksheet, currentRow - 1, currentRow - 1, tableHeader.length, true);
+  const tableHeader: string[] = ["Type of Record", "Period Covered", "No. of Pages"];
+  XLSX.utils.sheet_add_aoa(worksheet, [tableHeader], { origin: "A" + currentRow });
+  applyStyles(worksheet, currentRow - 1, currentRow - 1, tableHeader.length, true);
 
-    currentRow++;
+  currentRow++;
 
-    let reportIndex: number = 1;
-    const allReports = yearlyReports.filter((r) => r.role !== "ADMIN");
-
-    allReports.forEach((report) => {
+  const groupedReports: { [key: string]: { period: string; pages: number }[] } = {};
+  yearlyReports
+    .filter((r) => r.role !== "ADMIN")
+    .forEach((report) => {
+      const key = report.type_of_record;
       const periods = report.period_covered
         ? report.period_covered.split(",").map((p) => p.trim())
         : [""];
-      const noOfPages = report.no_of_pages ?? 0;
-
-      periods.forEach((period, idx) => {
-        const row = [
-          idx === 0 ? reportIndex++ : "",
-          idx === 0 ? report.type_of_record : "",
-          period,
-          idx === 0 ? noOfPages : "",
-          idx === 0 ? report.role : "",
-        ];
-        XLSX.utils.sheet_add_aoa(worksheet, [row], { origin: "A" + currentRow });
-        currentRow++;
-        if (idx === 0) totalPagesOverall += noOfPages;
+      periods.forEach((period) => {
+        if (!groupedReports[key]) {
+          groupedReports[key] = [];
+        }
+        groupedReports[key].push({ period, pages: report.no_of_pages });
       });
     });
 
-    applyStyles(worksheet, 6, currentRow - 1, tableHeader.length);
+  Object.keys(groupedReports).forEach((type) => {
+    const periods = groupedReports[type];
+    periods.forEach((entry, idx) => {
+      const row = [
+        idx === 0 ? type : "",
+        entry.period,
+        entry.pages,
+      ];
+      XLSX.utils.sheet_add_aoa(worksheet, [row], { origin: "A" + currentRow });
+      currentRow++;
+      totalPagesOverall += entry.pages;
+    });
+  });
 
-    const totalRow = ["", "TOTAL NO. OF PAGES", "", totalPagesOverall, ""];
-    XLSX.utils.sheet_add_aoa(worksheet, [totalRow], { origin: "A" + currentRow });
-    applyStyles(worksheet, currentRow - 1, currentRow - 1, tableHeader.length, true);
-    currentRow += 2;
+  applyStyles(worksheet, 6, currentRow - 1, tableHeader.length);
 
-    XLSX.utils.sheet_add_aoa(worksheet, [["Consolidated by:"]], { origin: "A" + currentRow });
-    currentRow++;
-    XLSX.utils.sheet_add_aoa(worksheet, [[""]], { origin: "A" + currentRow });
-    currentRow++;
-    XLSX.utils.sheet_add_aoa(worksheet, [["MARIA THERESA J. AGUIRRE"]], { origin: "A" + currentRow });
-    currentRow++;
-    XLSX.utils.sheet_add_aoa(worksheet, [["Chief HRS, PALD"]], { origin: "A" + currentRow });
-    currentRow++;
-    XLSX.utils.sheet_add_aoa(worksheet, [["Digitization Project Head"]], { origin: "A" + currentRow });
-    currentRow += 2;
-    XLSX.utils.sheet_add_aoa(worksheet, [["Noted by:"]], { origin: "A" + currentRow });
-    currentRow++;
-    XLSX.utils.sheet_add_aoa(worksheet, [["ATTY. ERNA T. ELIZAN"]], { origin: "A" + currentRow });
-    currentRow++;
-    XLSX.utils.sheet_add_aoa(worksheet, [["Acting Director III"]], { origin: "A" + currentRow });
+  const totalRow = ["TOTAL NO. OF PAGES", "", totalPagesOverall];
+  XLSX.utils.sheet_add_aoa(worksheet, [totalRow], { origin: "A" + currentRow });
+  applyStyles(worksheet, currentRow - 1, currentRow - 1, tableHeader.length, true);
+  currentRow += 2;
 
-    worksheet["!cols"] = [{ wch: 5 }, { wch: 50 }, { wch: 30 }, { wch: 15 }, { wch: 20 }];
+  XLSX.utils.sheet_add_aoa(worksheet, [["Consolidated by:"]], { origin: "A" + currentRow });
+  currentRow++;
+  XLSX.utils.sheet_add_aoa(worksheet, [[""]], { origin: "A" + currentRow });
+  currentRow++;
+  XLSX.utils.sheet_add_aoa(worksheet, [["MARIA THERESA J. AGUIRRE"]], { origin: "A" + currentRow });
+  currentRow++;
+  XLSX.utils.sheet_add_aoa(worksheet, [["Chief HRS, PALD"]], { origin: "A" + currentRow });
+  currentRow++;
+  XLSX.utils.sheet_add_aoa(worksheet, [["Digitization Project Head"]], { origin: "A" + currentRow });
+  currentRow += 2;
+  XLSX.utils.sheet_add_aoa(worksheet, [["Noted by:"]], { origin: "A" + currentRow });
+  currentRow++;
+  XLSX.utils.sheet_add_aoa(worksheet, [["ATTY. ERNA T. ELIZAN"]], { origin: "A" + currentRow });
+  currentRow++;
+  XLSX.utils.sheet_add_aoa(worksheet, [["Acting Director III"]], { origin: "A" + currentRow });
 
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, `Year_${currentYear}_Report`);
-    XLSX.writeFile(workbook, `Year_${currentYear}_Report.xlsx`);
+  worksheet["!cols"] = [{ wch: 50 }, { wch: 30 }, { wch: 15 }];
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, `Year_${currentYear}_Report`);
+  XLSX.writeFile(workbook, `Year_${currentYear}_Report.xlsx`);
+}
+
+ function downloadMonthlyReport() {
+  if (!selectedMonth || !selectedYear) {
+    toast.error("Please select both a month and a year to download the report.");
+    return;
   }
 
-  function downloadMonthlyReport() {
-    if (!selectedMonth || !selectedYear) {
-      toast.error("Please select both a month and a year to download the report.");
-      return;
-    }
+  const year = selectedYear;
+  const month = selectedMonth;
+  const monthName = new Date(`${year}-${month}-01`).toLocaleString("default", { month: "long" });
+  const filteredReports = reports.filter((r) => {
+    const reportDate = new Date(r.created_at);
+    return (
+      reportDate.getFullYear() === parseInt(year) &&
+      reportDate.getMonth() + 1 === parseInt(month) &&
+      r.role !== "ADMIN"
+    );
+  });
 
-    const year = selectedYear;
-    const month = selectedMonth;
-    const monthName = new Date(`${year}-${month}-01`).toLocaleString("default", { month: "long" });
-    const filteredReports = reports.filter((r) => {
-      const reportDate = new Date(r.created_at);
-      return (
-        reportDate.getFullYear() === parseInt(year) &&
-        reportDate.getMonth() + 1 === parseInt(month) &&
-        r.role !== "ADMIN"
-      );
-    });
-
-    if (filteredReports.length === 0) {
-      toast.error(`No reports exist for ${monthName} ${year}.`);
-      return;
-    }
-
-    const worksheet: XLSX.WorkSheet = XLSX.utils.aoa_to_sheet([]);
-
-    XLSX.utils.sheet_add_aoa(worksheet, [["Civil Service Commission Regional Office VI"]], {
-      origin: "B1",
-    });
-    XLSX.utils.sheet_add_aoa(worksheet, [["DIGITIZATION OF RECORDS"]], { origin: "B2" });
-    XLSX.utils.sheet_add_aoa(worksheet, [[`For the month of ${monthName} ${year}`]], { origin: "B3" });
-    XLSX.utils.sheet_add_aoa(worksheet, [["Target: 100% of Identified Records"]], { origin: "B4" });
-
-    worksheet["!merges"] = [
-      { s: { r: 0, c: 1 }, e: { r: 0, c: 3 } },
-      { s: { r: 1, c: 1 }, e: { r: 1, c: 3 } },
-      { s: { r: 2, c: 1 }, e: { r: 2, c: 3 } },
-      { s: { r: 3, c: 1 }, e: { r: 3, c: 3 } },
-    ];
-
-    applyStyles(worksheet, 0, 3, 4, true, true);
-
-    let currentRow: number = 6;
-    const tableHeader: string[] = ["No.", "Type of Record", "Period Covered", "No. of Pages", "Division"];
-    XLSX.utils.sheet_add_aoa(worksheet, [tableHeader], { origin: "A" + currentRow });
-    applyStyles(worksheet, currentRow - 1, currentRow - 1, tableHeader.length, true);
-
-    currentRow++;
-
-    let reportIndex: number = 1;
-    let totalPages: number = 0;
-
-    filteredReports.forEach((report) => {
-      const periods = report.period_covered
-        ? report.period_covered.split(",").map((p) => p.trim())
-        : [""];
-      const noOfPages = report.no_of_pages ?? 0;
-
-      periods.forEach((period, idx) => {
-        const row = [
-          idx === 0 ? reportIndex++ : "",
-          idx === 0 ? report.type_of_record : "",
-          period,
-          idx === 0 ? noOfPages : "",
-          idx === 0 ? report.role : "",
-        ];
-        XLSX.utils.sheet_add_aoa(worksheet, [row], { origin: "A" + currentRow });
-        currentRow++;
-        if (idx === 0) totalPages += noOfPages;
-      });
-    });
-
-    applyStyles(worksheet, 6, currentRow - 1, tableHeader.length);
-
-    const totalRow = ["", "TOTAL NO. OF PAGES", "", totalPages, ""];
-    XLSX.utils.sheet_add_aoa(worksheet, [totalRow], { origin: "A" + currentRow });
-    applyStyles(worksheet, currentRow - 1, currentRow - 1, tableHeader.length, true);
-    currentRow += 2;
-
-    XLSX.utils.sheet_add_aoa(worksheet, [["Consolidated by:"]], { origin: "A" + currentRow });
-    currentRow++;
-    XLSX.utils.sheet_add_aoa(worksheet, [[""]], { origin: "A" + currentRow });
-    currentRow++;
-    XLSX.utils.sheet_add_aoa(worksheet, [["MARIA THERESA J. AGUIRRE"]], { origin: "A" + currentRow });
-    currentRow++;
-    XLSX.utils.sheet_add_aoa(worksheet, [["Chief HRS, PALD"]], { origin: "A" + currentRow });
-    currentRow++;
-    XLSX.utils.sheet_add_aoa(worksheet, [["Digitization Project Head"]], { origin: "A" + currentRow });
-    currentRow += 2;
-    XLSX.utils.sheet_add_aoa(worksheet, [["Noted by:"]], { origin: "A" + currentRow });
-    currentRow++;
-    XLSX.utils.sheet_add_aoa(worksheet, [["ATTY. ERNA T. ELIZAN"]], { origin: "A" + currentRow });
-    currentRow++;
-    XLSX.utils.sheet_add_aoa(worksheet, [["Acting Director III"]], { origin: "A" + currentRow });
-
-    worksheet["!cols"] = [{ wch: 5 }, { wch: 50 }, { wch: 30 }, { wch: 15 }, { wch: 20 }];
-
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, `${monthName}_${year}_Report`);
-    XLSX.writeFile(workbook, `${monthName}_${year}_Report.xlsx`);
+  if (filteredReports.length === 0) {
+    toast.error(`No reports exist for ${monthName} ${year}.`);
+    return;
   }
+
+  const worksheet: XLSX.WorkSheet = XLSX.utils.aoa_to_sheet([]);
+
+  XLSX.utils.sheet_add_aoa(worksheet, [["Civil Service Commission Regional Office VI"]], {
+    origin: "B1",
+  });
+  XLSX.utils.sheet_add_aoa(worksheet, [["DIGITIZATION OF RECORDS"]], { origin: "B2" });
+  XLSX.utils.sheet_add_aoa(worksheet, [[`For the month of ${monthName} ${year}`]], { origin: "B3" });
+  XLSX.utils.sheet_add_aoa(worksheet, [["Target: 100% of Identified Records"]], { origin: "B4" });
+
+  worksheet["!merges"] = [
+    { s: { r: 0, c: 1 }, e: { r: 0, c: 2 } },
+    { s: { r: 1, c: 1 }, e: { r: 1, c: 2 } },
+    { s: { r: 2, c: 1 }, e: { r: 2, c: 2 } },
+    { s: { r: 3, c: 1 }, e: { r: 3, c: 2 } },
+  ];
+
+  applyStyles(worksheet, 0, 3, 3, true, true);
+
+  let currentRow: number = 6;
+  let totalPages: number = 0;
+
+  const tableHeader: string[] = ["Type of Record", "Period Covered", "No. of Pages"];
+  XLSX.utils.sheet_add_aoa(worksheet, [tableHeader], { origin: "A" + currentRow });
+  applyStyles(worksheet, currentRow - 1, currentRow - 1, tableHeader.length, true);
+
+  currentRow++;
+
+  const groupedReports: { [key: string]: { period: string; pages: number }[] } = {};
+  filteredReports.forEach((report) => {
+    const key = report.type_of_record;
+    const periods = report.period_covered
+      ? report.period_covered.split(",").map((p) => p.trim())
+      : [""];
+    periods.forEach((period) => {
+      if (!groupedReports[key]) {
+        groupedReports[key] = [];
+      }
+      groupedReports[key].push({ period, pages: report.no_of_pages });
+    });
+  });
+
+  Object.keys(groupedReports).forEach((type) => {
+    const periods = groupedReports[type];
+    periods.forEach((entry, idx) => {
+      const row = [
+        idx === 0 ? type : "",
+        entry.period,
+        entry.pages,
+      ];
+      XLSX.utils.sheet_add_aoa(worksheet, [row], { origin: "A" + currentRow });
+      currentRow++;
+      totalPages += entry.pages;
+    });
+  });
+
+  applyStyles(worksheet, 6, currentRow - 1, tableHeader.length);
+
+  const totalRow = ["TOTAL NO. OF PAGES", "", totalPages];
+  XLSX.utils.sheet_add_aoa(worksheet, [totalRow], { origin: "A" + currentRow });
+  applyStyles(worksheet, currentRow - 1, currentRow - 1, tableHeader.length, true);
+  currentRow += 2;
+
+  XLSX.utils.sheet_add_aoa(worksheet, [["Consolidated by:"]], { origin: "A" + currentRow });
+  currentRow++;
+  XLSX.utils.sheet_add_aoa(worksheet, [[""]], { origin: "A" + currentRow });
+  currentRow++;
+  XLSX.utils.sheet_add_aoa(worksheet, [["MARIA THERESA J. AGUIRRE"]], { origin: "A" + currentRow });
+  currentRow++;
+  XLSX.utils.sheet_add_aoa(worksheet, [["Chief HRS, PALD"]], { origin: "A" + currentRow });
+  currentRow++;
+  XLSX.utils.sheet_add_aoa(worksheet, [["Digitization Project Head"]], { origin: "A" + currentRow });
+  currentRow += 2;
+  XLSX.utils.sheet_add_aoa(worksheet, [["Noted by:"]], { origin: "A" + currentRow });
+  currentRow++;
+  XLSX.utils.sheet_add_aoa(worksheet, [["ATTY. ERNA T. ELIZAN"]], { origin: "A" + currentRow });
+  currentRow++;
+  XLSX.utils.sheet_add_aoa(worksheet, [["Acting Director III"]], { origin: "A" + currentRow });
+
+  worksheet["!cols"] = [{ wch: 50 }, { wch: 30 }, { wch: 15 }];
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, `${monthName}_${year}_Report`);
+  XLSX.writeFile(workbook, `${monthName}_${year}_Report.xlsx`);
+}
   
 
-  function generateRoleReport(periodType: "monthly" | "yearly", role: string) {
-    if (periodType === "monthly" && (!summaryMonth || !summaryYear)) {
-      toast.error("Please select both a month and a year for the monthly report.");
-      return;
-    }
-
-    const year = periodType === "monthly" ? parseInt(summaryYear) : parseInt(currentYear);
-    const month = periodType === "monthly" ? parseInt(summaryMonth) : null;
-    const monthName =
-      periodType === "monthly"
-        ? new Date(`${year}-${summaryMonth}-01`).toLocaleString("default", { month: "long" })
-        : "";
-    const reportTitle =
-      periodType === "monthly"
-        ? `For the month of ${monthName} ${year}`
-        : `For the Year ${year}`;
-    const periodName =
-      periodType === "monthly"
-        ? `${monthName}_${year}_${role}`
-        : `Year_${year}_${role}`;
-
-    const filteredReports = reports.filter((r) => {
-      const reportDate = new Date(r.created_at);
-      const matchesRole = r.role.toUpperCase() === role.toUpperCase();
-      if (periodType === "monthly") {
-        return matchesRole && reportDate.getFullYear() === year && reportDate.getMonth() + 1 === month;
-      } else {
-        return matchesRole && reportDate.getFullYear() === year;
-      }
-    });
-
-    if (filteredReports.length === 0) {
-      toast.error(`No reports found for ${role} in ${reportTitle}.`);
-      return;
-    }
-
-    const groupedReports: { [key: string]: { periods: { period: string; pages: number }[] } } = {};
-    filteredReports.forEach((report) => {
-      const key = report.type_of_record;
-      const period = report.period_covered;
-      if (!groupedReports[key]) {
-        groupedReports[key] = { periods: [] };
-      }
-      groupedReports[key].periods.push({ period, pages: report.no_of_pages });
-    });
-
-    const worksheet: XLSX.WorkSheet = XLSX.utils.aoa_to_sheet([]);
-    XLSX.utils.sheet_add_aoa(worksheet, [[`Civil Service Commission Regional Office VI - ${role.toUpperCase()}`]], {
-      origin: "B1",
-    });
-    XLSX.utils.sheet_add_aoa(worksheet, [["DIGITIZATION OF RECORDS"]], { origin: "B2" });
-    XLSX.utils.sheet_add_aoa(worksheet, [[reportTitle]], { origin: "B3" });
-    XLSX.utils.sheet_add_aoa(worksheet, [["Target: 100% of Identified Records"]], { origin: "B4" });
-
-    worksheet["!merges"] = [
-      { s: { r: 0, c: 1 }, e: { r: 0, c: 3 } },
-      { s: { r: 1, c: 1 }, e: { r: 1, c: 3 } },
-      { s: { r: 2, c: 1 }, e: { r: 2, c: 3 } },
-      { s: { r: 3, c: 1 }, e: { r: 3, c: 3 } },
-    ];
-
-    applyStyles(worksheet, 0, 3, 4, true, true);
-
-    let currentRow: number = 6;
-    const tableHeader: string[] = ["No.", "Type of Record", "Period Covered", "No. of Pages"];
-    XLSX.utils.sheet_add_aoa(worksheet, [tableHeader], { origin: "A" + currentRow });
-    applyStyles(worksheet, currentRow - 1, currentRow - 1, tableHeader.length, true);
-
-    currentRow++;
-
-    let reportIndex: number = 1;
-    let totalPages: number = 0;
-
-    filteredReports.forEach((report) => {
-      const periods = report.period_covered
-        ? report.period_covered.split(',').map((p) => p.trim())
-        : [""];
-      const noOfPages = report.no_of_pages ?? 0;
-
-      periods.forEach((period, idx) => {
-        const row = [
-          idx === 0 ? reportIndex++ : "",
-          idx === 0 ? report.type_of_record : "",
-          period,
-          idx === 0 ? noOfPages : "",
-        ];
-        XLSX.utils.sheet_add_aoa(worksheet, [row], { origin: "A" + currentRow });
-        currentRow++;
-        if (idx === 0) totalPages += noOfPages;
-      });
-    });
-
-    applyStyles(worksheet, 6, currentRow - 1, tableHeader.length);
-
-    const totalRow = ["", "TOTAL NO. OF PAGES", "", totalPages];
-    XLSX.utils.sheet_add_aoa(worksheet, [totalRow], { origin: "A" + currentRow });
-    applyStyles(worksheet, currentRow - 1, currentRow - 1, tableHeader.length, true);
-    currentRow += 2;
-
-    XLSX.utils.sheet_add_aoa(worksheet, [["Consolidated by:"]], { origin: "A" + currentRow });
-    currentRow++;
-    XLSX.utils.sheet_add_aoa(worksheet, [[""]], { origin: "A" + currentRow });
-    currentRow++;
-    XLSX.utils.sheet_add_aoa(worksheet, [["MARIA THERESA J. AGUIRRE"]], { origin: "A" + currentRow });
-    currentRow++;
-    XLSX.utils.sheet_add_aoa(worksheet, [["Chief HRS, PALD"]], { origin: "A" + currentRow });
-    currentRow++;
-    XLSX.utils.sheet_add_aoa(worksheet, [["Digitization Project Head"]], { origin: "A" + currentRow });
-    currentRow += 2;
-    XLSX.utils.sheet_add_aoa(worksheet, [["Noted by:"]], { origin: "A" + currentRow });
-    currentRow++;
-    XLSX.utils.sheet_add_aoa(worksheet, [["ATTY. ERNA T. ELIZAN"]], { origin: "A" + currentRow });
-    currentRow++;
-    XLSX.utils.sheet_add_aoa(worksheet, [["Acting Director III"]], { origin: "A" + currentRow });
-
-    worksheet["!cols"] = [{ wch: 5 }, { wch: 50 }, { wch: 30 }, { wch: 15 }];
-
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, `${periodName}_Report`);
-    XLSX.writeFile(workbook, `${periodName}_Report.xlsx`);
+ function generateRoleReport(periodType: "monthly" | "yearly", role: string) {
+  if (periodType === "monthly" && (!summaryMonth || !summaryYear)) {
+    toast.error("Please select both a month and a year for the monthly report.");
+    return;
   }
 
-  const uniqueRoles = [...new Set(users.map((u) => u.role).filter((r) => r !== "ADMIN"))];
+  const year = periodType === "monthly" ? parseInt(summaryYear) : parseInt(currentYear);
+  const month = periodType === "monthly" ? parseInt(summaryMonth) : null;
+  const monthName =
+    periodType === "monthly"
+      ? new Date(`${year}-${summaryMonth}-01`).toLocaleString("default", { month: "long" })
+      : "";
+  const reportTitle =
+    periodType === "monthly"
+      ? `For the month of ${monthName} ${year}`
+      : `For the Year ${year}`;
+  const periodName =
+    periodType === "monthly"
+      ? `${monthName}_${year}_${role}`
+      : `Year_${year}_${role}`;
+
+  const filteredReports = reports.filter((r) => {
+    const reportDate = new Date(r.created_at);
+    const matchesRole = r.role.toUpperCase() === role.toUpperCase();
+    if (periodType === "monthly") {
+      return matchesRole && reportDate.getFullYear() === year && reportDate.getMonth() + 1 === month;
+    } else {
+      return matchesRole && reportDate.getFullYear() === year;
+    }
+  });
+
+  if (filteredReports.length === 0) {
+    toast.error(`No reports found for ${role} in ${reportTitle}.`);
+    return;
+  }
+
+  const worksheet: XLSX.WorkSheet = XLSX.utils.aoa_to_sheet([]);
+  XLSX.utils.sheet_add_aoa(worksheet, [[`Civil Service Commission Regional Office VI - ${role.toUpperCase()}`]], {
+    origin: "B1",
+  });
+  XLSX.utils.sheet_add_aoa(worksheet, [["DIGITIZATION OF RECORDS"]], { origin: "B2" });
+  XLSX.utils.sheet_add_aoa(worksheet, [[reportTitle]], { origin: "B3" });
+  XLSX.utils.sheet_add_aoa(worksheet, [["Target: 100% of Identified Records"]], { origin: "B4" });
+
+  worksheet["!merges"] = [
+    { s: { r: 0, c: 1 }, e: { r: 0, c: 2 } },
+    { s: { r: 1, c: 1 }, e: { r: 1, c: 2 } },
+    { s: { r: 2, c: 1 }, e: { r: 2, c: 2 } },
+    { s: { r: 3, c: 1 }, e: { r: 3, c: 2 } },
+  ];
+
+  applyStyles(worksheet, 0, 3, 3, true, true);
+
+  let currentRow: number = 6;
+  const tableHeader: string[] = ["Type of Record", "Period Covered", "No. of Pages"];
+  XLSX.utils.sheet_add_aoa(worksheet, [tableHeader], { origin: "A" + currentRow });
+  applyStyles(worksheet, currentRow - 1, currentRow - 1, tableHeader.length, true);
+
+  currentRow++;
+
+  let totalPages: number = 0;
+  const groupedReports: { [key: string]: { period: string; pages: number }[] } = {};
+  filteredReports.forEach((report) => {
+    const key = report.type_of_record;
+    const periods = report.period_covered
+      ? report.period_covered.split(',').map((p) => p.trim())
+      : [""];
+    periods.forEach((period) => {
+      if (!groupedReports[key]) {
+        groupedReports[key] = [];
+      }
+      groupedReports[key].push({ period, pages: report.no_of_pages });
+    });
+  });
+
+  Object.keys(groupedReports).forEach((type) => {
+    const periods = groupedReports[type];
+    periods.forEach((entry, idx) => {
+      const row = [
+        idx === 0 ? type : "",
+        entry.period,
+        entry.pages,
+      ];
+      XLSX.utils.sheet_add_aoa(worksheet, [row], { origin: "A" + currentRow });
+      currentRow++;
+      totalPages += entry.pages;
+    });
+  });
+
+  applyStyles(worksheet, 6, currentRow - 1, tableHeader.length);
+
+  const totalRow = ["TOTAL NO. OF PAGES", "", totalPages];
+  XLSX.utils.sheet_add_aoa(worksheet, [totalRow], { origin: "A" + currentRow });
+  applyStyles(worksheet, currentRow - 1, currentRow - 1, tableHeader.length, true);
+  currentRow += 2;
+
+  XLSX.utils.sheet_add_aoa(worksheet, [["Consolidated by:"]], { origin: "A" + currentRow });
+  currentRow++;
+  XLSX.utils.sheet_add_aoa(worksheet, [[""]], { origin: "A" + currentRow });
+  currentRow++;
+  XLSX.utils.sheet_add_aoa(worksheet, [["MARIA THERESA J. AGUIRRE"]], { origin: "A" + currentRow });
+  currentRow++;
+  XLSX.utils.sheet_add_aoa(worksheet, [["Chief HRS, PALD"]], { origin: "A" + currentRow });
+  currentRow++;
+  XLSX.utils.sheet_add_aoa(worksheet, [["Digitization Project Head"]], { origin: "A" + currentRow });
+  currentRow += 2;
+  XLSX.utils.sheet_add_aoa(worksheet, [["Noted by:"]], { origin: "A" + currentRow });
+  currentRow++;
+  XLSX.utils.sheet_add_aoa(worksheet, [["ATTY. ERNA T. ELIZAN"]], { origin: "A" + currentRow });
+  currentRow++;
+  XLSX.utils.sheet_add_aoa(worksheet, [["Acting Director III"]], { origin: "A" + currentRow });
+
+  worksheet["!cols"] = [{ wch: 50 }, { wch: 30 }, { wch: 15 }];
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, `${periodName}_Report`);
+  XLSX.writeFile(workbook, `${periodName}_Report.xlsx`);
+}
 
   const chartData = {
     labels: uniqueRoles,
@@ -975,6 +992,7 @@ return (
         <div className="p-3">
           <h3 className="text-sm font-bold text-[#003087] mb-3 font-['Poppins']">Navigation</h3>
           <nav className="space-y-1">
+
             <button
               onClick={() => handleNavigation('report-visualization')}
               className="w-full text-left px-3 py-1 text-[#003087] hover:bg-[#F5F6F5] rounded text-xs font-medium"
@@ -1021,77 +1039,78 @@ return (
             >
               Consolidated Report
             </button>
+
           </nav>
         </div>
       </div>
     )}
 
     {/* Mobile Hamburger Menu */}
-      {showMobileMenu && (
-        <div className="md:hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex">
-          <div className="w-64 bg-white h-full p-4 shadow-lg fixed top-0 left-0 max-h-full overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold text-[#003087] font-['Poppins']">Menu</h3>
-              <button
-                onClick={() => setShowMobileMenu(false)}
-                className="text-[#C1272D] hover:text-[#a12025] text-xl"
-              >
-                ✕
-              </button>
-            </div>
-            <nav className="space-y-2">
-              <button
-                onClick={() => handleNavigation('report-visualization')}
-                className="w-full text-left px-4 py-2 text-[#003087] hover:bg-[#F5F6F5] rounded text-sm font-medium"
-              >
-                Report Visualization
-              </button>
-              <div>
+        {showMobileMenu && (
+          <div className="md:hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex">
+            <div className="w-64 bg-white h-full p-4 shadow-lg fixed top-0 left-0 max-h-full overflow-y-auto">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-bold text-[#003087] font-['Poppins']">Menu</h3>
                 <button
-                  onClick={() => setShowMobileDepartmentMenu(!showMobileDepartmentMenu)}
-                  className="w-full flex justify-between items-center px-4 py-2 text-[#003087] hover:bg-[#F5F6F5] rounded text-sm font-medium"
+                  onClick={() => setShowMobileMenu(false)}
+                  className="text-[#C1272D] hover:text-[#a12025] text-xl"
                 >
-                  Department Reports
-                  <span>{showMobileDepartmentMenu ? '▲' : '▼'}</span>
+                  ✕
                 </button>
-                {showMobileDepartmentMenu && (
-                  <div className="pl-6 space-y-1 max-h-40 overflow-y-auto">
-                    {uniqueRoles.map((role) => (
-                      <button
-                        key={role}
-                        onClick={() => handleNavigation(`department-${role.toLowerCase()}`)}
-                        className="w-full text-left px-4 py-1 text-[#003087] hover:bg-[#F5F6F5] rounded text-xs"
-                      >
-                        {role}
-                      </button>
-                    ))}
-                  </div>
-                )}
               </div>
-              <button
-                onClick={() => handleNavigation('manage-categories', { showCategories: true })}
-                className="w-full text-left px-4 py-2 text-[#003087] hover:bg-[#F5F6F5] rounded text-sm font-medium"
-              >
-                Manage Categories
-              </button>
-              <button
-                onClick={() => handleNavigation('report-per-office')}
-                className="w-full text-left px-4 py-2 text-[#003087] hover:bg-[#F5F6F5] rounded text-sm font-medium"
-              >
-                Report per Office
-              </button>
-              <button
-                onClick={() => handleNavigation('consolidated-report')}
-                className="w-full text-left px-4 py-2 text-[#003087] hover:bg-[#F5F6F5] rounded text-sm font-medium"
-              >
-                Consolidated Report
-              </button>
-            </nav>
+              <nav className="space-y-2">
+                <button
+                  onClick={() => handleNavigation('report-visualization')}
+                  className="w-full text-left px-4 py-2 text-[#003087] hover:bg-[#F5F6F5] rounded text-sm font-medium"
+                >
+                  Report Visualization
+                </button>
+                <div>
+                  <button
+                    onClick={() => setShowMobileDepartmentMenu(!showMobileDepartmentMenu)}
+                    className="w-full flex justify-between items-center px-4 py-2 text-[#003087] hover:bg-[#F5F6F5] rounded text-sm font-medium"
+                  >
+                    Department Reports
+                    <span>{showMobileDepartmentMenu ? '▲' : '▼'}</span>
+                  </button>
+                  {showMobileDepartmentMenu && (
+                    <div className="pl-6 space-y-1 max-h-40 overflow-y-auto">
+                      {uniqueRoles.map((role) => (
+                        <button
+                          key={role}
+                          onClick={() => handleNavigation(`department-${role.toLowerCase()}`)}
+                          className="w-full text-left px-4 py-1 text-[#003087] hover:bg-[#F5F6F5] rounded text-xs"
+                        >
+                          {role}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <button
+                  onClick={() => handleNavigation('manage-categories', { showCategories: true })}
+                  className="w-full text-left px-4 py-2 text-[#003087] hover:bg-[#F5F6F5] rounded text-sm font-medium"
+                >
+                  Manage Categories
+                </button>
+                <button
+                  onClick={() => handleNavigation('report-per-office')}
+                  className="w-full text-left px-4 py-2 text-[#003087] hover:bg-[#F5F6F5] rounded text-sm font-medium"
+                >
+                  Report per Office
+                </button>
+                <button
+                  onClick={() => handleNavigation('consolidated-report')}
+                  className="w-full text-left px-4 py-2 text-[#003087] hover:bg-[#F5F6F5] rounded text-sm font-medium"
+                >
+                  Consolidated Report
+                </button>
+                
+              </nav>
+            </div>
+            <div className="flex-1" onClick={() => setShowMobileMenu(false)}></div>
           </div>
-          <div className="flex-1" onClick={() => setShowMobileMenu(false)}></div>
-        </div>
-      )}
-
+)}
     {/* Mobile Hamburger Menu Button */}
     {!showMobileMenu && (
       <div className="md:hidden fixed top-4 left-4 z-50">
@@ -1187,103 +1206,103 @@ return (
         </div>
       </header>
 
-      {uniqueRoles.map((role) => {
-        const roleReports = reports.filter((r) => r.role.toUpperCase() === role.toUpperCase());
-        const totalPages = roleReports.reduce((sum, r) => sum + r.no_of_pages, 0);
+     {uniqueRoles.map((role) => {
+          const roleReports = reports.filter((r) => r.role.toUpperCase() === role.toUpperCase());
+          const totalPages = roleReports.reduce((sum, r) => sum + r.no_of_pages, 0);
 
-        return (
-          <div key={role} className="mb-6 sm:mb-8" id={`department-${role.toLowerCase()}`}>
-            <h2 className="text-base sm:text-lg md:text-xl font-semibold text-[#003087] mb-3 sm:mb-4 font-['Poppins']">
-              {role} Reports
-            </h2>
-            {roleReports.length === 0 ? (
-              <p className="text-gray-500 text-xs sm:text-sm md:text-base">
-                No reports submitted for {role}.
-              </p>
-            ) : (
-              <div className="overflow-x-auto max-h-60">
-                <table className="w-full border-collapse table-auto text-xs sm:text-sm">
-                  <thead>
-                    <tr className="bg-[#003087] text-white sticky top-0">
-                      <th className="p-1 sm:p-2 text-left w-[40px] sm:w-[50px]">
-                        No.
-                      </th>
-                      <th className="p-1 sm:p-2 text-left w-[150px] sm:w-[200px]">
-                        Type of Record
-                      </th>
-                      <th className="p-1 sm:p-2 text-left w-[120px] sm:w-[150px]">
-                        Period Covered
-                      </th>
-                      <th className="p-1 sm:p-2 text-left w-[80px] sm:w-[100px]">
-                        No. of Pages
-                      </th>
-                      <th className="p-1 sm:p-2 text-left w-[80px] sm:w-[100px]">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {roleReports.map((r, index) => (
-                      <tr key={r.id} className="border-b hover:bg-[#F5F6F5]">
-                        <td
-                          className="p-1 sm:p-2 truncate text-[#003087]"
-                          title={String(index + 1)}
-                        >
-                          {index + 1}
-                        </td>
-                        <td
-                          className="p-1 sm:p-2 truncate text-[#003087]"
-                          title={r.type_of_record}
-                        >
-                          {r.type_of_record}
-                        </td>
-                        <td
-                          className="p-1 sm:p-2 truncate text-[#003087]"
-                          title={r.period_covered}
-                        >
-                          {r.period_covered}
-                        </td>
-                        <td
-                          className="p-1 sm:p-2 truncate text-[#003087]"
-                          title={String(r.no_of_pages)}
-                        >
-                          {r.no_of_pages}
-                        </td>
-                        <td className="p-1 sm:p-2">
-                          <button
-                            onClick={() => {
-                              setViewReport(r);
-                              setViewingDepartmentReport(true);
-                              setShowCategoriesView(false);
-                              setShowPendingModal(false);
-                              setShowDeleteModal(false);
-                            }}
-                            className="text-[#003087] hover:text-[#002060] font-medium transition-colors text-xs sm:text-sm"
-                          >
-                            View
-                          </button>
-                        </td>
+          return (
+            <div key={role} className="mb-6 sm:mb-8" id={`department-${role.toLowerCase()}`}>
+              <h2 className="text-base sm:text-lg md:text-xl font-semibold text-[#003087] mb-3 sm:mb-4 font-['Poppins']">
+                {role} Reports
+              </h2>
+              {roleReports.length === 0 ? (
+                <p className="text-gray-500 text-xs sm:text-sm md:text-base">
+                  No reports submitted for {role}.
+                </p>
+              ) : (
+                <div className="overflow-x-auto max-h-60">
+                  <table className="w-full border-collapse table-auto text-xs sm:text-sm">
+                    <thead>
+                      <tr className="bg-[#003087] text-white sticky top-0">
+                        <th className="p-1 sm:p-2 text-center w-[40px] sm:w-[50px]">
+                          No.
+                        </th>
+                        <th className="p-1 sm:p-2 text-center w-[150px] sm:w-[200px]">
+                          Type of Record
+                        </th>
+                        <th className="p-1 sm:p-2 text-center w-[120px] sm:w-[150px]">
+                          Period Covered
+                        </th>
+                        <th className="p-1 sm:p-2 text-center w-[80px] sm:w-[100px]">
+                          No. of Pages
+                        </th>
+                        <th className="p-1 sm:p-2 text-center w-[80px] sm:w-[100px]">
+                          Actions
+                        </th>
                       </tr>
-                    ))}
-                    <tr className="font-bold">
-                      <td
-                        colSpan={3}
-                        className="p-1 sm:p-2 text-right text-[#003087]"
-                      >
-                        Total No. of Pages
-                      </td>
-                      <td className="p-1 sm:p-2 text-[#003087]">
-                        {totalPages}
-                      </td>
-                      <td></td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        );
-      })}
+                    </thead>
+                    <tbody>
+                      {roleReports.map((r, index) => (
+                        <tr key={r.id} className="border-b hover:bg-[#F5F6F5]">
+                          <td
+                            className="p-1 sm:p-2 text-center truncate text-[#003087]"
+                            title={String(index + 1)}
+                          >
+                            {index + 1}
+                          </td>
+                          <td
+                            className="p-1 sm:p-2 text-center truncate text-[#003087]"
+                            title={r.type_of_record}
+                          >
+                            {truncateLabel(r.type_of_record, 20)}
+                          </td>
+                          <td
+                            className="p-1 sm:p-2 text-center truncate text-[#003087]"
+                            title={r.period_covered}
+                          >
+                            {r.period_covered}
+                          </td>
+                          <td
+                            className="p-1 sm:p-2 text-center truncate text-[#003087]"
+                            title={String(r.no_of_pages)}
+                          >
+                            {r.no_of_pages}
+                          </td>
+                          <td className="p-1 sm:p-2 text-center">
+                            <button
+                              onClick={() => {
+                                setViewReport(r);
+                                setViewingDepartmentReport(true);
+                                setShowCategoriesView(false);
+                                setShowPendingModal(false);
+                                setShowDeleteModal(false);
+                              }}
+                              className="text-[#003087] hover:text-[#002060] font-medium transition-colors text-xs sm:text-sm"
+                            >
+                              View
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                      <tr className="font-bold">
+                        <td
+                          colSpan={3}
+                          className="p-1 sm:p-2 text-right text-[#003087]"
+                        >
+                          Total No. of Pages
+                        </td>
+                        <td className="p-1 sm:p-2 text-center text-[#003087]">
+                          {totalPages}
+                        </td>
+                        <td></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          );
+        })}
 
       <div className="mb-6 sm:mb-8" id="manage-categories">
         <h2 className="text-base sm:text-lg md:text-xl font-semibold text-[#003087] mb-3 sm:mb-4 font-['Poppins']">
@@ -1610,7 +1629,7 @@ return (
         </div>
       </div>
 
-      {viewReport && (
+     {viewReport && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-2 sm:p-4">
           <div className="bg-white p-3 sm:p-4 md:p-6 rounded-lg shadow-lg w-full max-w-md max-h-[90vh] overflow-y-auto">
             <h2 className="text-base sm:text-lg md:text-xl font-bold text-[#003087] mb-3 sm:mb-4 font-['Poppins']">
@@ -1631,6 +1650,15 @@ return (
             <p className="text-gray-700 text-xs sm:text-sm md:text-base">
               <span className="font-medium text-[#003087]">Division:</span>{" "}
               {viewReport?.role}
+            </p>
+            <p className="text-gray-700 text-xs sm:text-sm md:text-base">
+              <span className="font-medium text-[#003087]">Submitted On:</span>{" "}
+              {new Date(viewReport?.created_at).toLocaleDateString("en-US", {
+                weekday: "long",
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+              })}
             </p>
             <button
               onClick={() => {
@@ -1706,7 +1734,7 @@ return (
         </div>
       )}
 
-      {showYearlyModal && (
+ {showYearlyModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-2 sm:p-4">
           <div className="bg-white p-3 sm:p-4 md:p-6 rounded-lg shadow-lg w-full max-w-2xl sm:max-w-4xl max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-3 sm:mb-4">
@@ -1724,10 +1752,7 @@ return (
               <table className="w-full border-collapse table-auto text-xs sm:text-sm">
                 <thead>
                   <tr className="bg-[#003087] text-white sticky top-0">
-                    <th className="p-1 sm:p-2 text-center w-[40px] sm:w-[50px]">
-                      No.
-                    </th>
-                    <th className="p-1 sm:p-2 text-left w-[150px] sm:w-[200px]">
+                    <th className="p-1 sm:p-2 text-center min-w-[120px] sm:min-w-[150px] max-w-[200px]">
                       Type of Record
                     </th>
                     <th className="p-1 sm:p-2 text-center w-[120px] sm:w-[150px]">
@@ -1736,64 +1761,69 @@ return (
                     <th className="p-1 sm:p-2 text-center w-[80px] sm:w-[100px]">
                       No. of Pages
                     </th>
-                    <th className="p-1 sm:p-2 text-center w-[80px] sm:w-[100px]">
-                      Division
-                    </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {yearlyReports
-                    .filter((r) => r.role !== "ADMIN")
-                    .map((r, index) => (
-                      <tr key={r.id} className="border-b hover:bg-[#F5F6F5]">
-                        <td
-                          className="p-1 sm:p-2 text-center truncate text-[#003087]"
-                          title={String(index + 1)}
-                        >
-                          {index + 1}
+                  {(() => {
+                    const groupedReports: { [key: string]: { period: string; pages: number }[] } = {};
+                    yearlyReports
+                      .filter((r) => r.role !== "ADMIN")
+                      .forEach((r) => {
+                        const key = r.type_of_record;
+                        const periods = r.period_covered
+                          ? r.period_covered.split(",").map((p) => p.trim())
+                          : [""];
+                        periods.forEach((period) => {
+                          if (!groupedReports[key]) {
+                            groupedReports[key] = [];
+                          }
+                          groupedReports[key].push({ period, pages: r.no_of_pages });
+                        });
+                      });
+
+                    let totalPages = 0;
+                    const rows: JSX.Element[] = [];
+
+                    Object.keys(groupedReports).forEach((type, index) => {
+                      const periods = groupedReports[type];
+                      periods.forEach((entry, idx) => {
+                        totalPages += entry.pages;
+                        rows.push(
+                          <tr key={`${type}-${idx}`} className="border-b hover:bg-[#F5F6F5]">
+                            <td
+                              className="p-1 sm:p-2 text-center text-[#003087] min-w-[120px] sm:min-w-[150px] max-w-[200px] whitespace-normal"
+                            >
+                              {idx === 0 ? type : ""}
+                            </td>
+                            <td
+                              className="p-1 sm:p-2 text-center truncate text-[#003087]"
+                              title={entry.period}
+                            >
+                              {entry.period}
+                            </td>
+                            <td
+                              className="p-1 sm:p-2 text-center text-[#003087] whitespace-nowrap"
+                            >
+                              {entry.pages}
+                            </td>
+                          </tr>
+                        );
+                      });
+                    });
+
+                    rows.push(
+                      <tr key="total" className="font-bold">
+                        <td colSpan={2} className="p-1 sm:p-2 text-right text-[#003087]">
+                          Total No. of Pages
                         </td>
-                        <td
-                          className="p-1 sm:p-2 text-left truncate text-[#003087]"
-                          title={r.type_of_record}
-                        >
-                          {r.type_of_record}
-                        </td>
-                        <td
-                          className="p-1 sm:p-2 text-center truncate text-[#003087]"
-                          title={r.period_covered}
-                        >
-                          {r.period_covered}
-                        </td>
-                        <td
-                          className="p-1 sm:p-2 text-center truncate text-[#003087]"
-                          title={String(r.no_of_pages)}
-                        >
-                          {r.no_of_pages}
-                        </td>
-                        <td
-                          className="p-1 sm:p-2 text-center truncate text-[#003087]"
-                          title={r.role}
-                        >
-                          {r.role}
+                        <td className="p-1 sm:p-2 text-center text-[#003087] whitespace-nowrap">
+                          {totalPages}
                         </td>
                       </tr>
-                    ))}
-                  <tr className="font-bold">
-                    <td
-                      colSpan={3}
-                      className="p-1 sm:p-2 text-right text-[#003087]"
-                    >
-                      Total No. of Pages
-                    </td>
-                    <td
-                      className="p-1 sm:p-2 text-center text-[#003087]"
-                    >
-                      {yearlyReports
-                        .filter((r) => r.role !== "ADMIN")
-                        .reduce((sum, r) => sum + r.no_of_pages, 0)}
-                    </td>
-                    <td></td>
-                  </tr>
+                    );
+
+                    return rows;
+                  })()}
                 </tbody>
               </table>
             </div>
