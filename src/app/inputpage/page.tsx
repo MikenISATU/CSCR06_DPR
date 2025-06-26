@@ -496,7 +496,7 @@ export default function InputPage() {
           </div>
           <div className="flex space-x-2 sm:space-x-3">
             <a
-              href="https://drive.google.com/file/d/YOUR_GDRIVE_PUBLIC_LINK/view"
+              href="https://drive.google.com/file/d/1hA67mjGSxywfgpTLoEyJcGmmtG9f-VFH/view?ts=685bbafe"
               target="_blank"
               rel="noopener noreferrer"
               className="text-[#003087] hover:text-[#002060] font-medium transition-colors text-xs sm:text-sm"
