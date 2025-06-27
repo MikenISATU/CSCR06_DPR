@@ -1782,7 +1782,7 @@ return (
                       });
 
                     let totalPages = 0;
-                    const rows: JSX.Element[] = [];
+                    const rows: React.ReactNode[] = [];
 
                     Object.keys(groupedReports).forEach((type, index) => {
                       const periods = groupedReports[type];
