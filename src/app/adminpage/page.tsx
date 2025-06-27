@@ -1039,6 +1039,15 @@ return (
             >
               Consolidated Report
             </button>
+            
+                  <a
+                    href={ADMIN_MANUAL_LINK}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block w-full text-left px-3 py-1 text-[#C1272D] hover:text-[#a12025] hover:bg-[#F5F6F5] rounded text-xs font-medium"
+                  >
+                    View Admin Manual
+                  </a>
 
           </nav>
         </div>
@@ -1106,6 +1115,15 @@ return (
                   Consolidated Report
                 </button>
                 
+                                    <a
+                    href={ADMIN_MANUAL_LINK}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full text-left px-4 py-2 text-[#C1272D] hover:bg-[#F5F6F5] rounded text-sm font-medium"
+                  >
+                    View Admin Manual
+                  </a>
+
               </nav>
             </div>
             <div className="flex-1" onClick={() => setShowMobileMenu(false)}></div>
@@ -1173,17 +1191,6 @@ return (
               </span>
             )}
           </div>
-
-          {!viewReport && !showPendingModal && !showYearlyModal && !showMonthlySummary && !showDeleteModal && !activeSlider && (
-            <a
-              href={ADMIN_MANUAL_LINK}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="py-1 px-2 sm:py-2 sm:px-4 bg-[#00A86B] text-white rounded hover:bg-[#008B5D] transition-colors font-medium text-xs sm:text-sm text-center"
-            >
-              View Admin Manual
-            </a>
-          )}
 
           <button
             onClick={() => setActiveSlider("users")}
