@@ -87,6 +87,8 @@ export default function AdminPage() {
   const [showCategoriesView, setShowCategoriesView] = useState(false);
   const [viewingDepartmentReport, setViewingDepartmentReport] = useState(false);
   const currentYear = new Date().getFullYear().toString();
+  const [showCategoryDeleteModal, setShowCategoryDeleteModal] = useState<boolean>(false);
+  const [categoryToDelete, setCategoryToDelete] = useState<number | null>(null);
   const ADMIN_MANUAL_LINK = "https://drive.google.com/file/d/133jDrEXoEGaLUD4bU0eGc6xOcDbQzPYZ/view?ts=685bbaef"; 
 
 
@@ -234,20 +236,39 @@ export default function AdminPage() {
     fetchCategories();
   }
 
-  async function deleteCategory(categoryId: number) {
-    const { error } = await supabase
-      .from("record_categories")
-      .delete()
-      .eq("id", categoryId);
+async function deleteCategory(categoryId: number) {
+  setShowMobileMenu(false); // Add this line
+  setShowDeleteModal(false);
+  setShowPendingModal(false);
+  setShowYearlyModal(false);
+  setShowMonthlySummary(false);
+  setCategoryToDelete(categoryId);
+  setShowCategoryDeleteModal(true);
+}
 
-    if (error) {
-      toast.error("Error deleting category: " + error.message);
-      return;
-    }
+async function confirmDeleteCategory() {
+  if (!categoryToDelete) return;
 
-    toast.success("Category deleted successfully!");
-    fetchCategories();
+  const { error } = await supabase
+    .from("record_categories")
+    .delete()
+    .eq("id", categoryToDelete);
+
+  if (error) {
+    toast.error("Error deleting category: " + error.message);
+    setShowCategoryDeleteModal(false);
+    setCategoryToDelete(null);
+    return;
   }
+
+  toast.success("Category deleted successfully!");
+  setShowCategoryDeleteModal(false);
+  setCategoryToDelete(null);
+  fetchCategories();
+}
+
+
+
 
   async function deleteUser(userId: string) {
     const userToDelete = users.find((u) => u.id === userId);
@@ -987,7 +1008,7 @@ return (
     <Toaster position="top-right" />
 
     {/* Desktop Floating Navigation Menu */}
-    {!showCategoriesView && !showDeleteModal && !showPendingModal && !viewingDepartmentReport && !viewReport && !showYearlyModal && !showMonthlySummary && !activeSlider && (
+    {!showCategoriesView && !showDeleteModal && !showPendingModal && !viewingDepartmentReport && !viewReport && !showYearlyModal && !showMonthlySummary && !activeSlider && !showCategoryDeleteModal && (
   <div className="hidden md:block fixed top-20 left-[calc(50%-750px)] w-48 bg-white shadow-lg rounded-lg z-50 max-h-[calc(100vh-4rem)] overflow-y-auto">
         <div className="p-3">
           <h3 className="text-sm font-bold text-[#003087] mb-3 font-['Poppins']">Navigation</h3>
@@ -1902,6 +1923,43 @@ return (
           </div>
         </div>
       )}
+
+      {showCategoryDeleteModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-2 sm:p-4">
+            <div className="bg-white p-3 sm:p-4 md:p-6 rounded-lg shadow-lg w-full max-w-md max-h-[90vh] overflow-y-auto">
+              <h2 className="text-base sm:text-lg md:text-xl font-bold text-[#003087] mb-3 sm:mb-4 font-['Poppins']">
+                Confirm Deletion
+              </h2>
+              <p className="text-gray-700 text-xs sm:text-sm md:text-base mb-4">
+                Are you sure you want to delete the category{" "}
+                <span className="font-medium text-[#003087]">
+                  {categories.find((c) => c.id === categoryToDelete)?.category}
+                </span>? This action cannot be undone.
+              </p>
+              <div className="flex space-x-3">
+                <button
+                  onClick={confirmDeleteCategory}
+                  className="flex-1 py-1 sm:p-2 bg-[#C1272D] text-white rounded hover:bg-[#a12025] transition-colors font-medium text-xs sm:text-sm"
+                >
+                  Delete
+                </button>
+
+
+                <button
+                  onClick={() => {
+                    setShowCategoryDeleteModal(false);
+                    setCategoryToDelete(null);
+                  }}
+                  className="flex-1 py-1 sm:p-2 bg-[#003087] text-white rounded hover:bg-[#002060] transition-colors font-medium text-xs sm:text-sm"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+          )}
+
+          
 
       {activeSlider === "users" && (
         <div
