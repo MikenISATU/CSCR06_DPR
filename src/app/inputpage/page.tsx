@@ -35,7 +35,7 @@ export default function InputPage() {
   const [reportToDelete, setReportToDelete] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
-  const currentDate = new Date('2025-06-25T09:55:00-07:00'); // Set to 09:55 AM PST, June 25, 2025
+  const currentDate = new Date();
   const currentMonth = currentDate.getMonth() + 1;
   const currentYear = currentDate.getFullYear();
   const monthName = currentDate.toLocaleString('default', { month: 'long' });
@@ -60,7 +60,6 @@ export default function InputPage() {
     if (user && user.role !== 'ADMIN') {
       fetchCategories(user.role);
       fetchReports();
-      // Real-time subscription
       const reportsSubscription = supabase
         .channel('custom-all-channel')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'monthly_reports1' }, () => fetchReports())
@@ -79,7 +78,6 @@ export default function InputPage() {
         .from('record_categories')
         .select('category')
         .eq('role', role.toUpperCase());
-
       if (error) throw error;
       const categoryList = data?.map((item: { category: string }) => item.category) || [];
       setCategories([...categoryList, 'Other']);
@@ -222,11 +220,9 @@ export default function InputPage() {
     let reportTitle: string;
     let filteredReports: Report[];
     let periodName: string;
-    const currentMonth = currentDate.getMonth() + 1;
-    const currentYear = currentDate.getFullYear();
 
     if (periodType === 'monthly') {
-      reportTitle = `the month of ${monthName} ${currentYear}`;
+      reportTitle = `Monthly Report for ${monthName} ${currentYear}`;
       periodName = `${monthName}_${currentYear}`;
       filteredReports = reports.filter((report) => {
         if (!report.created_at) return false;
@@ -234,19 +230,18 @@ export default function InputPage() {
         return reportDate.getMonth() + 1 === currentMonth && reportDate.getFullYear() === currentYear;
       });
     } else if (periodType === 'semestral') {
-      const semester = parseInt(selectedMonth) <= 6 ? 'First' : 'Second';
-      reportTitle = `${semester} Semester ${selectedYear}`;
-      periodName = `${semester}_Semester_${selectedYear}`;
+      reportTitle = `Second Semester 2025`; // Example for July-December 2025
+      periodName = `Second_Semester_2025`;
       filteredReports = reports.filter((report) => {
         if (!report.created_at) return false;
         const reportDate = new Date(report.created_at);
         return (
-          reportDate.getFullYear() === parseInt(selectedYear) &&
-          ((semester === 'First' && reportDate.getMonth() + 1 <= 6) || (semester === 'Second' && reportDate.getMonth() + 1 > 6))
+          reportDate.getFullYear() === 2025 &&
+          reportDate.getMonth() + 1 >= 7 && reportDate.getMonth() + 1 <= 12
         );
       });
     } else {
-      reportTitle = `for the Year ${selectedYear}`;
+      reportTitle = `Yearly Report ${selectedYear}`;
       periodName = `Year_${selectedYear}`;
       filteredReports = reports.filter((report) => {
         if (!report.created_at) return false;
@@ -259,6 +254,15 @@ export default function InputPage() {
       toast.error(`No reports found for ${reportTitle}`, { duration: 3000 });
       return;
     }
+
+    // Group reports by type_of_record
+    const groupedReports = filteredReports.reduce((acc, report) => {
+      if (!acc[report.type_of_record]) {
+        acc[report.type_of_record] = [];
+      }
+      acc[report.type_of_record].push(report);
+      return acc;
+    }, {} as Record<string, Report[]>);
 
     const worksheet: XLSX.WorkSheet = XLSX.utils.aoa_to_sheet([]);
     XLSX.utils.sheet_add_aoa(worksheet, [[user?.role.toUpperCase()]], { origin: 'B1' });
@@ -277,21 +281,29 @@ export default function InputPage() {
     applyStyles(worksheet, currentRow - 1, currentRow - 1, tableHeader.length, true);
 
     currentRow++;
-
     let reportIndex: number = 1;
     let totalPages: number = 0;
 
-    filteredReports.forEach((report) => {
-      const row = [reportIndex++, report.type_of_record, report.period_covered, report.no_of_pages];
-      totalPages += report.no_of_pages;
-      XLSX.utils.sheet_add_aoa(worksheet, [row], { origin: 'A' + currentRow });
+    Object.keys(groupedReports).sort().forEach((type) => {
+      // Add type_of_record as a header row
+      XLSX.utils.sheet_add_aoa(worksheet, [[type]], { origin: `B${currentRow}` });
+      worksheet['!merges']!.push({ s: { r: currentRow - 1, c: 1 }, e: { r: currentRow - 1, c: 3 } });
+      applyStyles(worksheet, currentRow - 1, currentRow - 1, 4, true);
       currentRow++;
+
+      // Add reports for this type
+      groupedReports[type].forEach((report) => {
+        const row = [reportIndex++, '', report.period_covered, report.no_of_pages];
+        totalPages += report.no_of_pages;
+        XLSX.utils.sheet_add_aoa(worksheet, [row], { origin: `A${currentRow}` });
+        currentRow++;
+      });
     });
 
     applyStyles(worksheet, 4, currentRow - 1, tableHeader.length);
 
     const totalRow = ['', 'TOTAL NO. OF PAGES', '', totalPages];
-    XLSX.utils.sheet_add_aoa(worksheet, [totalRow], { origin: 'A' + currentRow });
+    XLSX.utils.sheet_add_aoa(worksheet, [totalRow], { origin: `A${currentRow}` });
     applyStyles(worksheet, currentRow - 1, currentRow - 1, tableHeader.length, true);
 
     worksheet['!cols'] = [{ wch: 5 }, { wch: 50 }, { wch: 30 }, { wch: 15 }];
@@ -351,6 +363,21 @@ export default function InputPage() {
     );
   });
 
+  // Generate all dates from the 1st to the current date in the current month
+  const generateMonthDates = () => {
+    const dates = [];
+    const startDate = new Date(currentYear, currentMonth - 1, 1);
+    const endDate = new Date(currentDate);
+    for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+      dates.push(new Date(d).toLocaleDateString('en-US', {
+        month: '2-digit',
+        day: '2-digit',
+        year: 'numeric',
+      }));
+    }
+    return dates;
+  };
+
   const dailyGroupedReports = currentMonthReports.reduce((acc, report) => {
     if (!report.created_at) return acc;
     const reportDate = new Date(report.created_at);
@@ -367,28 +394,17 @@ export default function InputPage() {
 
   const chartData = (reportsData: Report[]) => {
     if (reportsData === currentMonthReports) {
-      const dates = Object.keys(dailyGroupedReports).sort((a, b) => {
-        const dateA = new Date(a);
-        const dateB = new Date(b);
-        return dateA.getTime() - dateB.getTime();
-      });
+      const dates = generateMonthDates();
       const types = [...new Set(currentMonthReports.map((r) => r.type_of_record))];
-      const currentDateStr = currentDate.toLocaleDateString('en-US', {
-        month: '2-digit',
-        day: '2-digit',
-        year: 'numeric',
-      });
-      const updatedLabels = dates.length > 0 ? dates : [currentDateStr];
       return {
-        labels: updatedLabels,
+        labels: dates,
         datasets: types.map((type, index) => ({
           label: type,
-          data: updatedLabels.map((date) => dailyGroupedReports[date] ? dailyGroupedReports[date][type] || 0 : 0),
+          data: dates.map((date) => dailyGroupedReports[date]?.[type] || 0),
           backgroundColor: [
             '#003087', '#0087DC', '#C8102E', '#B39C6F', '#4B5EAA', '#A6192E', '#D4A017', '#6A7281', '#005670',
             '#E57373', '#90CAF9', '#FBC02D', '#3F51B5', '#D81B60', '#81C784',
           ][index % 15],
-          stack: 'Stack',
         })),
       };
     }
@@ -403,6 +419,7 @@ export default function InputPage() {
           backgroundColor: '#003087',
           borderColor: '#002060',
           borderWidth: 1,
+          stack: 'Stack',
         },
       ],
     };
@@ -414,35 +431,50 @@ export default function InputPage() {
     plugins: {
       legend: {
         position: 'top' as const,
+        labels: {
+          font: { size: 12 },
+          padding: 15,
+        },
       },
       title: {
         display: true,
         text: reportsData === currentMonthReports
-          ? `Daily Pages per Record Type (${monthName} ${currentYear})`
-          : `Total Pages per Record Type (${showMonthlySummary ? `${months[parseInt(selectedMonth) - 1].label} ${selectedYear}` : showSemestralSummary ? `Semester ${selectedYear}` : `Year ${selectedYear}`})`,
-        font: { size: 12 },
+          ? `Daily Reports for ${monthName} ${currentYear}`
+          : `Total Pages per Record Type (${showMonthlySummary ? `${months[parseInt(selectedMonth) - 1].label} ${selectedYear}` : showSemestralSummary ? `Second Semester ${selectedYear}` : `Year ${selectedYear}`})`,
+        font: { size: 14 },
+        padding: { top: 10, bottom: 10 },
+      },
+      tooltip: {
+        bodyFont: { size: 12 },
+        titleFont: { size: 12 },
       },
     },
     scales: {
       y: {
         beginAtZero: true,
-        title: { display: true, text: 'Number of Pages', font: { size: 10 } },
-        stacked: reportsData === currentMonthReports,
+        title: { display: true, text: 'Number of Pages', font: { size: 12 } },
+        stacked: reportsData !== currentMonthReports,
+        ticks: {
+          font: { size: 10 },
+          precision: 0,
+        },
       },
       x: {
         title: {
           display: true,
           text: reportsData === currentMonthReports ? 'Date' : 'Type of Record',
-          font: { size: 10 },
+          font: { size: 12 },
         },
         ticks: {
-          font: { size: 8 },
+          font: { size: 10 },
+          maxRotation: 45,
+          minRotation: 45,
           callback: function (value: string | number) {
             const label = String(value);
             return label.length > 10 ? label.substring(0, 7) + '...' : label;
           },
         },
-        stacked: reportsData === currentMonthReports,
+        stacked: reportsData !== currentMonthReports,
       },
     },
   });
@@ -516,9 +548,9 @@ export default function InputPage() {
           <>
             <div className="mb-6">
               <h2 className="text-sm sm:text-base md:text-lg font-bold text-[#003087] mb-3 sm:mb-4">
-                Current Month Reports ({monthName} {currentYear})
+                Daily Reports for {monthName} {currentYear}
               </h2>
-              <div className="h-40 sm:h-48 md:h-64">
+              <div className="h-64 sm:h-80 md:h-96 w-full">
                 <Bar data={chartData(currentMonthReports)} options={chartOptions(currentMonthReports)} />
               </div>
             </div>
@@ -647,7 +679,7 @@ export default function InputPage() {
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-1/2 p-1 sm:p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[#003087] transition-colors text-black placeholder-gray-500 text-xs sm:text-sm"
+                className="w-full sm:w-1/2 p-1 sm:p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[#003087] transition-colors text-black placeholder-gray-500 text-xs sm:text-sm"
                 placeholder="Search by type or period"
               />
             </div>
@@ -742,7 +774,7 @@ export default function InputPage() {
               </p>
               <button
                 onClick={() => setViewReport(null)}
-                className="mt-2 sm:mt-3 w-full py-1 sm:p-sm bg-[#003087] text-white rounded hover:bg-[#002060] transition-colors font-medium text-xs sm:text-sm"
+                className="mt-2 sm:mt-3 w-full py-1 sm:py-2 bg-[#003087] text-white rounded hover:bg-[#002060] transition-colors font-medium text-xs sm:text-sm"
               >
                 Close
               </button>
@@ -826,13 +858,13 @@ export default function InputPage() {
                 <div className="flex space-x-2 sm:space-x-3">
                   <button
                     type="submit"
-                    className="flex-1 py-1 sm:p-2 bg-[#003087] text-white rounded-md hover:bg-[#002060] transition-colors font-medium text-xs sm:text-sm"
+                    className="flex-1 py-1 sm:py-2 bg-[#003087] text-white rounded-md hover:bg-[#002060] transition-colors font-medium text-xs sm:text-sm"
                   >
                     Save Changes
                   </button>
                   <button
                     onClick={() => setEditReport(null)}
-                    className="flex-1 py-1 sm:p-2 bg-[#C1272D] text-white rounded-md hover:bg-[#a12025] transition-colors font-medium text-xs sm:text-sm"
+                    className="flex-1 py-1 sm:py-2 bg-[#C1272D] text-white rounded-md hover:bg-[#a12025] transition-colors font-medium text-xs sm:text-sm"
                   >
                     Cancel
                   </button>
@@ -912,7 +944,7 @@ export default function InputPage() {
                   </select>
                 </div>
               )}
-              <div className="mb-3 sm:mb-4 h-40 sm:h-48 md:h-64">
+              <div className="mb-3 sm:mb-4 h-64 sm:h-80 md:h-96 w-full">
                 <Bar
                   data={chartData(showMonthlySummary ? filteredReportsMonth : showSemestralSummary ? semestralReports : yearlyReports)}
                   options={chartOptions(showMonthlySummary ? filteredReportsMonth : showSemestralSummary ? semestralReports : yearlyReports)}
@@ -974,7 +1006,7 @@ export default function InputPage() {
                   setShowYearlySummary(false);
                   setShowSemestralSummary(false);
                 }}
-                className="mt-2 sm:mt-3 w-full py-1 sm:p-2 bg-[#003087] text-white rounded-md hover:bg-[#002060] transition-colors font-medium text-sm"
+                className="mt-2 sm:mt-3 w-full py-1 sm:py-2 bg-[#003087] text-white rounded-md hover:bg-[#002060] transition-colors font-medium text-sm"
               >
                 Close
               </button>
@@ -997,7 +1029,7 @@ export default function InputPage() {
               <div className="flex space-x-2 sm:space-x-3">
                 <button
                   onClick={() => reportToDelete && handleDelete(reportToDelete)}
-                  className="flex-1 py-1 sm:p-2 bg-[#C1272D] text-white rounded-md hover:bg-[#a12025] transition-colors font-medium text-xs sm:text-sm"
+                  className="flex-1 py-1 sm:py-2 bg-[#C1272D] text-white rounded-md hover:bg-[#a12025] transition-colors font-medium text-xs sm:text-sm"
                 >
                   Delete
                 </button>
@@ -1006,7 +1038,7 @@ export default function InputPage() {
                     setShowDeleteModal(false);
                     setReportToDelete(null);
                   }}
-                  className="flex-1 py-1 sm:p-2 bg-[#003087] text-white rounded-md hover:bg-[#002060] transition-colors font-medium text-xs sm:text-sm"
+                  className="flex-1 py-1 sm:py-2 bg-[#003087] text-white rounded-md hover:bg-[#002060] transition-colors font-medium text-xs sm:text-sm"
                 >
                   Cancel
                 </button>
