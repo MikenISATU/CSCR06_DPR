@@ -35,6 +35,14 @@ export default function InputPage() {
   const [reportToDelete, setReportToDelete] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
+  // CHANGES START HERE — state for download modals (independent from summaries)
+  type PeriodType = 'monthly' | 'semestral' | 'yearly';
+  const [downloadType, setDownloadType] = useState<PeriodType | null>(null);
+  const [dlMonth, setDlMonth] = useState<string>((new Date().getMonth() + 1).toString());
+  const [dlYear, setDlYear] = useState<string>(new Date().getFullYear().toString());
+  const [dlSemBound, setDlSemBound] = useState<'6' | '12'>('6'); // 6 = First (Jan–Jun), 12 = Second (Jul–Dec)
+  // CHANGES ENDS HERE
+
   const currentDate = new Date();
   const currentMonth = currentDate.getMonth() + 1;
   const currentYear = currentDate.getFullYear();
@@ -216,37 +224,48 @@ export default function InputPage() {
     }
   }
 
-  function generateReport(periodType: 'monthly' | 'semestral' | 'yearly') {
+  // CHANGES START HERE — same old generator, but accepts optional overrides from the download modal
+  function generateReport(
+    periodType: 'monthly' | 'semestral' | 'yearly',
+    opts?: { month?: number; year?: number; semBound?: 6 | 12 }
+  ) {
     let reportTitle: string;
     let filteredReports: Report[];
     let periodName: string;
 
+    // Use optional overrides (for download modal) or fall back to original behavior
+    const monthForDownload = opts?.month ?? (new Date().getMonth() + 1);
+    const yearForDownload = opts?.year ?? new Date().getFullYear();
+    const semBound = opts?.semBound ?? 12; // default to Second (Jul–Dec) if not specified
+
     if (periodType === 'monthly') {
-      reportTitle = `Monthly Report for ${monthName} ${currentYear}`;
-      periodName = `${monthName}_${currentYear}`;
+      const mName = months[monthForDownload - 1].label;
+      reportTitle = `Monthly Report for ${mName} ${yearForDownload}`;
+      periodName = `${mName}_${yearForDownload}`;
       filteredReports = reports.filter((report) => {
         if (!report.created_at) return false;
         const reportDate = new Date(report.created_at);
-        return reportDate.getMonth() + 1 === currentMonth && reportDate.getFullYear() === currentYear;
+        return reportDate.getMonth() + 1 === monthForDownload && reportDate.getFullYear() === yearForDownload;
       });
     } else if (periodType === 'semestral') {
-      reportTitle = `Second Semester 2025`; // Example for July-December 2025
-      periodName = `Second_Semester_2025`;
+      const isFirst = semBound === 6;
+      reportTitle = `${isFirst ? 'First' : 'Second'} Semester ${yearForDownload}`;
+      periodName = `${isFirst ? 'First' : 'Second'}_Semester_${yearForDownload}`;
       filteredReports = reports.filter((report) => {
         if (!report.created_at) return false;
-        const reportDate = new Date(report.created_at);
+        const d = new Date(report.created_at);
         return (
-          reportDate.getFullYear() === 2025 &&
-          reportDate.getMonth() + 1 >= 7 && reportDate.getMonth() + 1 <= 12
+          d.getFullYear() === yearForDownload &&
+          (isFirst ? d.getMonth() + 1 <= 6 : d.getMonth() + 1 >= 7)
         );
       });
     } else {
-      reportTitle = `Yearly Report ${selectedYear}`;
-      periodName = `Year_${selectedYear}`;
+      reportTitle = `Yearly Report ${yearForDownload}`;
+      periodName = `Year_${yearForDownload}`;
       filteredReports = reports.filter((report) => {
         if (!report.created_at) return false;
         const reportDate = new Date(report.created_at);
-        return reportDate.getFullYear() === parseInt(selectedYear);
+        return reportDate.getFullYear() === yearForDownload;
       });
     }
 
@@ -255,11 +274,9 @@ export default function InputPage() {
       return;
     }
 
-    // Group reports by type_of_record
+    // Group reports by type_of_record (same as your original)
     const groupedReports = filteredReports.reduce((acc, report) => {
-      if (!acc[report.type_of_record]) {
-        acc[report.type_of_record] = [];
-      }
+      if (!acc[report.type_of_record]) acc[report.type_of_record] = [];
       acc[report.type_of_record].push(report);
       return acc;
     }, {} as Record<string, Report[]>);
@@ -285,13 +302,11 @@ export default function InputPage() {
     let totalPages: number = 0;
 
     Object.keys(groupedReports).sort().forEach((type) => {
-      // Add type_of_record as a header row
       XLSX.utils.sheet_add_aoa(worksheet, [[type]], { origin: `B${currentRow}` });
       worksheet['!merges']!.push({ s: { r: currentRow - 1, c: 1 }, e: { r: currentRow - 1, c: 3 } });
       applyStyles(worksheet, currentRow - 1, currentRow - 1, 4, true);
       currentRow++;
 
-      // Add reports for this type
       groupedReports[type].forEach((report) => {
         const row = [reportIndex++, '', report.period_covered, report.no_of_pages];
         totalPages += report.no_of_pages;
@@ -313,19 +328,18 @@ export default function InputPage() {
     XLSX.writeFile(workbook, `${periodName}_Report.xlsx`);
     toast.success(`Report generated: ${periodName}`, { duration: 3000 });
   }
+  // CHANGES ENDS HERE
 
   function viewMonthlySummary() {
     setShowMonthlySummary(true);
     setShowYearlySummary(false);
     setShowSemestralSummary(false);
   }
-
   function viewYearlySummary() {
     setShowYearlySummary(true);
     setShowMonthlySummary(false);
     setShowSemestralSummary(false);
   }
-
   function viewSemestralSummary() {
     setShowSemestralSummary(true);
     setShowMonthlySummary(false);
@@ -363,7 +377,6 @@ export default function InputPage() {
     );
   });
 
-  // Generate all dates from the 1st to the current date in the current month
   const generateMonthDates = () => {
     const dates = [];
     const startDate = new Date(currentYear, currentMonth - 1, 1);
@@ -526,22 +539,42 @@ export default function InputPage() {
               )}
             </div>
           </div>
-          <div className="flex space-x-2 sm:space-x-3">
+
+          {/* CHANGES START HERE — header icon buttons */}
+          <div className="flex items-center gap-2 sm:gap-3">
             <a
               href="https://drive.google.com/file/d/1hA67mjGSxywfgpTLoEyJcGmmtG9f-VFH/view?ts=685bbafe"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-[#003087] hover:text-[#002060] font-medium transition-colors text-xs sm:text-sm"
+              className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[#003087] hover:text-[#002060] hover:bg-[#EEF2FF] transition text-xs sm:text-sm"
+              aria-label="Open User Manual"
+              title="User Manual"
             >
-              User Manual
+              {/* “Retrieve / external doc” icon */}
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M14 3h7v7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M10 14L21 3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              <span className="hidden sm:inline">User Manual</span>
             </a>
+
             <button
               onClick={logout}
-              className="text-[#C1272D] hover:text-[#a12025] font-medium transition-colors text-xs sm:text-sm"
+              className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[#C1272D] hover:text-[#a12025] hover:bg-red-50 transition text-xs sm:text-sm"
+              aria-label="Logout"
+              title="Logout"
             >
-              Logout
+              {/* arrow-right-on-box icon */}
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M10 17l5-5-5-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M15 12H3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              <span className="hidden sm:inline">Logout</span>
             </button>
           </div>
+          {/* CHANGES ENDS HERE */}
         </header>
 
         {!showMonthlySummary && !showYearlySummary && !showSemestralSummary && !viewReport && !editReport && (
@@ -650,24 +683,27 @@ export default function InputPage() {
             >
               View Yearly Summary
             </button>
+
+            {/* CHANGES START HERE — download buttons open modals */}
             <button
-              onClick={() => generateReport('monthly')}
+              onClick={() => { setDownloadType('monthly'); setDlMonth((new Date().getMonth() + 1).toString()); setDlYear(new Date().getFullYear().toString()); }}
               className="w-full sm:w-auto flex-1 py-1 sm:py-2 bg-[#C1272D] text-white rounded hover:bg-[#a12025] transition-colors font-medium text-xs sm:text-sm"
             >
               Download Monthly Report
             </button>
             <button
-              onClick={() => generateReport('semestral')}
+              onClick={() => { setDownloadType('semestral'); setDlSemBound('6'); setDlYear(new Date().getFullYear().toString()); }}
               className="w-full sm:w-auto flex-1 py-1 sm:py-2 bg-[#C1272D] text-white rounded hover:bg-[#a12025] transition-colors font-medium text-xs sm:text-sm"
             >
               Download Semestral Report
             </button>
             <button
-              onClick={() => generateReport('yearly')}
+              onClick={() => { setDownloadType('yearly'); setDlYear(new Date().getFullYear().toString()); }}
               className="w-full sm:w-auto flex-1 py-1 sm:py-2 bg-[#C1272D] text-white rounded hover:bg-[#a12025] transition-colors font-medium text-xs sm:text-sm"
             >
               Download Yearly Report
             </button>
+            {/* CHANGES ENDS HERE */}
           </div>
         )}
 
@@ -717,29 +753,44 @@ export default function InputPage() {
                           {r.created_at ? new Date(r.created_at).toLocaleDateString() : 'N/A'}
                         </td>
                         <td className="p-1">
-                          <div className="flex space-x-2 sm:space-x-3">
+                          {/* CHANGES START HERE — icon action buttons */}
+                          <div className="flex items-center gap-2 sm:gap-3">
                             <button
-                              onClick={() => {
-                                setReportToDelete(r.id);
-                                setShowDeleteModal(true);
-                              }}
-                              className="text-[#C1272D] hover:text-[#a12025] font-medium transition-colors text-xs sm:text-sm"
+                              onClick={() => setViewReport(r)}
+                              className="p-1 rounded hover:bg-[#EEF2FF] text-[#003087]"
+                              title="View"
+                              aria-label="View"
                             >
-                              Delete
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z" stroke="currentColor" strokeWidth="1.6" fill="none"/>
+                                <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.6" fill="none"/>
+                              </svg>
                             </button>
                             <button
                               onClick={() => setEditReport(r)}
-                              className="text-[#003087] hover:text-[#002060] font-medium transition-colors text-xs sm:text-sm"
+                              className="p-1 rounded hover:bg-[#EEF2FF] text-[#003087]"
+                              title="Edit"
+                              aria-label="Edit"
                             >
-                              Edit
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                <path d="M12 20h9" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+                                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L8 18l-4 1 1-4 11.5-11.5Z" stroke="currentColor" strokeWidth="1.6" fill="none" strokeLinejoin="round"/>
+                              </svg>
                             </button>
                             <button
-                              onClick={() => setViewReport(r)}
-                              className="text-[#003087] hover:text-[#002060] font-medium transition-colors text-xs sm:text-sm"
+                              onClick={() => { setReportToDelete(r.id); setShowDeleteModal(true); }}
+                              className="p-1 rounded hover:bg-red-50 text-[#C1272D]"
+                              title="Delete"
+                              aria-label="Delete"
                             >
-                              View
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                <path d="M3 6h18" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+                                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" stroke="currentColor" strokeWidth="1.6" fill="none"/>
+                                <path d="M14 6V4a2 2 0 0 0-2-2h0a2 2 0 0 0-2 2v2" stroke="currentColor" strokeWidth="1.6"/>
+                              </svg>
                             </button>
                           </div>
+                          {/* CHANGES ENDS HERE */}
                         </td>
                       </tr>
                     ))
@@ -751,8 +802,10 @@ export default function InputPage() {
         )}
 
         {viewReport && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-2 sm:p-4">
+          // CHANGES START HERE — blurred backdrop instead of black
+          <div className="fixed inset-0 bg-white/30 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4">
             <div className="bg-white p-2 sm:p-3 md:p-4 rounded-lg shadow-lg w-full max-w-sm sm:max-w-md max-h-[90vh] overflow-y-auto">
+              {/* CHANGES ENDS HERE */}
               <h2 className="text-sm sm:text-base md:text-lg font-bold text-[#003087] mb-2 sm:mb-3 font-['Poppins']">
                 Report Details
               </h2>
@@ -783,7 +836,7 @@ export default function InputPage() {
         )}
 
         {editReport && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-2 sm:p-4">
+          <div className="fixed inset-0 bg-white/30 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4">
             <div className="bg-white p-2 sm:p-3 md:p-4 rounded-lg shadow-lg w-full max-w-sm sm:max-w-md max-h-[90vh] overflow-y-auto">
               <h2 className="text-sm sm:text-base md:text-lg font-bold text-[#003087] mb-2 sm:mb-3 font-['Poppins']">
                 Edit Report
@@ -818,14 +871,14 @@ export default function InputPage() {
                     <label className="block mb-1 text-xs sm:text-sm font-medium text-[#003087]">
                       Custom Type of Record
                     </label>
-                    <input
-                      type="text"
-                      value={customType}
-                      onChange={(e) => setCustomType(e.target.value)}
-                      className="w-full p-1 sm:p-2 border border-gray-300 rounded-md text-black placeholder-gray-500 text-xs sm:text-sm"
-                      placeholder="Enter custom record type"
-                      required
-                    />
+                      <input
+                        type="text"
+                        value={customType}
+                        onChange={(e) => setCustomType(e.target.value)}
+                        className="w-full p-1 sm:p-2 border border-gray-300 rounded-md text-black placeholder-gray-500 text-xs sm:text-sm"
+                        placeholder="Enter custom record type"
+                        required
+                      />
                   </div>
                 )}
 
@@ -851,7 +904,7 @@ export default function InputPage() {
                     value={editReport.no_of_pages}
                     onChange={(e) => setEditReport({ ...editReport, no_of_pages: Number(e.target.value) })}
                     className="w-full p-1 sm:p-2 border border-gray-300 rounded-md text-black placeholder-gray-500 text-xs sm:text-sm"
-                    min="0"
+                    min={0}
                     required
                   />
                 </div>
@@ -864,6 +917,7 @@ export default function InputPage() {
                   </button>
                   <button
                     onClick={() => setEditReport(null)}
+                    type="button"
                     className="flex-1 py-1 sm:py-2 bg-[#C1272D] text-white rounded-md hover:bg-[#a12025] transition-colors font-medium text-xs sm:text-sm"
                   >
                     Cancel
@@ -875,7 +929,7 @@ export default function InputPage() {
         )}
 
         {(showMonthlySummary || showYearlySummary || showSemestralSummary) && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-2 sm:p-4">
+          <div className="fixed inset-0 bg-white/30 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4">
             <div className="bg-white p-2 sm:p-3 md:p-4 rounded-lg shadow-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto">
               <h2 className="text-sm sm:text-base md:text-lg font-bold text-[#003087] font-['Poppins'] mb-2 sm:mb-3">
                 {showMonthlySummary ? 'Monthly Summary' : showSemestralSummary ? 'Semestral Summary' : 'Yearly Summary'}
@@ -885,7 +939,7 @@ export default function InputPage() {
                   <select
                     value={selectedMonth}
                     onChange={(e) => setSelectedMonth(e.target.value)}
-                    className="w-full p-1 sm:p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[#003087] text-xs sm:text-sm"
+                    className="w-full p-1 sm:p-2 border rounded-md bg-white text-[#111827] focus:outline-none focus:ring-2 focus:ring-[#003087] text-xs sm:text-sm"
                   >
                     {months.map((month) => (
                       <option key={month.value} value={month.value}>
@@ -896,7 +950,7 @@ export default function InputPage() {
                   <select
                     value={selectedYear}
                     onChange={(e) => setSelectedYear(e.target.value)}
-                    className="w-full p-1 sm:p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[#003087] text-xs sm:text-sm"
+                    className="w-full p-1 sm:p-2 border rounded-md bg-white text-[#111827] focus:outline-none focus:ring-2 focus:ring-[#003087] text-xs sm:text-sm"
                   >
                     {years.map((year) => (
                       <option key={year} value={year}>
@@ -911,7 +965,7 @@ export default function InputPage() {
                   <select
                     value={selectedMonth}
                     onChange={(e) => setSelectedMonth(e.target.value)}
-                    className="w-full p-1 sm:p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[#003087] text-xs sm:text-sm"
+                    className="w-full p-1 sm:p-2 border rounded-md bg-white text-[#111827]  focus:outline-none focus:ring-2 focus:ring-[#003087] text-xs sm:text-sm"
                   >
                     <option value="6">First Semester (Jan-Jun)</option>
                     <option value="12">Second Semester (Jul-Dec)</option>
@@ -919,7 +973,7 @@ export default function InputPage() {
                   <select
                     value={selectedYear}
                     onChange={(e) => setSelectedYear(e.target.value)}
-                    className="w-full p-1 sm:p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[#003087] text-xs sm:text-sm"
+                    className="w-full p-1 sm:p-2 border rounded-md bg-white text-[#111827]  focus:outline-none focus:ring-2 focus:ring-[#003087] text-xs sm:text-sm"
                   >
                     {years.map((year) => (
                       <option key={year} value={year}>
@@ -934,7 +988,7 @@ export default function InputPage() {
                   <select
                     value={selectedYear}
                     onChange={(e) => setSelectedYear(e.target.value)}
-                    className="w-full p-1 sm:p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[#003087] text-xs sm:text-sm"
+                    className="w-full p-1 sm:p-2 border rounded-md bg-white text-[#111827]  focus:outline-none focus:ring-2 focus:ring-[#003087] text-xs sm:text-sm"
                   >
                     {years.map((year) => (
                       <option key={year} value={year}>
@@ -1015,7 +1069,7 @@ export default function InputPage() {
         )}
 
         {showDeleteModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-2 sm:p-4 z-50" style={{ zIndex: 1000 }}>
+          <div className="fixed inset-0 bg-white/30 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 z-50">
             <div className="bg-white p-2 sm:p-3 md:p-4 rounded-lg shadow-lg w-full max-w-sm sm:max-w-md max-h-[90vh] overflow-y-auto">
               <h2 className="text-sm sm:text-base md:text-lg font-bold text-[#003087] mb-2 sm:mb-3 font-['Poppins']">
                 Confirm Deletion
@@ -1046,6 +1100,95 @@ export default function InputPage() {
             </div>
           </div>
         )}
+
+        {/* CHANGES START HERE — download modals with blurred background */}
+        {downloadType && (
+          <div className="fixed inset-0 bg-white/30 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 z-[9999]">
+            <div className="bg-white p-3 sm:p-4 rounded-lg shadow-lg border border-gray-200 w-full max-w-sm sm:max-w-md">
+              <h3 className="text-sm sm:text-base md:text-lg font-bold text-[#003087] mb-3">
+                {downloadType === 'monthly' && 'Download Monthly Report'}
+                {downloadType === 'semestral' && 'Download Semestral Report'}
+                {downloadType === 'yearly' && 'Download Yearly Report'}
+              </h3>
+
+              {downloadType === 'monthly' && (
+                <div className="flex flex-col sm:flex-row gap-2 mb-3">
+                  <select
+                    value={dlMonth}
+                    onChange={(e) => setDlMonth(e.target.value)}
+                    className="w-full p-2 border rounded-md bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#003087]"
+                  >
+                    {months.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+                  </select>
+                  <select
+                    value={dlYear}
+                    onChange={(e) => setDlYear(e.target.value)}
+                    className="w-full p-2 border rounded-md bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#003087]"
+                  >
+                    {years.map((y) => <option key={y} value={y}>{y}</option>)}
+                  </select>
+                </div>
+              )}
+
+              {downloadType === 'semestral' && (
+                <div className="flex flex-col sm:flex-row gap-2 mb-3">
+                  <select
+                    value={dlSemBound}
+                    onChange={(e) => setDlSemBound(e.target.value as '6' | '12')}
+                    className="w-full p-2 border rounded-md bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#003087]"
+                  >
+                    <option value="6">First Semester (Jan–Jun)</option>
+                    <option value="12">Second Semester (Jul–Dec)</option>
+                  </select>
+                  <select
+                    value={dlYear}
+                    onChange={(e) => setDlYear(e.target.value)}
+                    className="w-full p-2 border rounded-md bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#003087]"
+                  >
+                    {years.map((y) => <option key={y} value={y}>{y}</option>)}
+                  </select>
+                </div>
+              )}
+
+              {downloadType === 'yearly' && (
+                <div className="mb-3">
+                  <select
+                    value={dlYear}
+                    onChange={(e) => setDlYear(e.target.value)}
+                    className="w-full p-2 border rounded-md bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#003087]"
+                  >
+                    {years.map((y) => <option key={y} value={y}>{y}</option>)}
+                  </select>
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    if (downloadType === 'monthly') {
+                      generateReport('monthly', { month: parseInt(dlMonth), year: parseInt(dlYear) });
+                    } else if (downloadType === 'semestral') {
+                      generateReport('semestral', { year: parseInt(dlYear), semBound: dlSemBound === '6' ? 6 : 12 });
+                    } else {
+                      generateReport('yearly', { year: parseInt(dlYear) });
+                    }
+                    setDownloadType(null);
+                  }}
+                  className="flex-1 py-2 bg-[#003087] text-white rounded hover:bg-[#002060] transition font-medium text-sm"
+                >
+                  Download
+                </button>
+                <button
+                  onClick={() => setDownloadType(null)}
+                  className="flex-1 py-2 bg-[#C1272D] text-white rounded hover:bg-[#a12025] transition font-medium text-sm"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        {/* CHANGES ENDS HERE */}
       </div>
     </div>
   );
