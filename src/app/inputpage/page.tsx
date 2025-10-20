@@ -31,6 +31,7 @@ export default function InputPage() {
   const [categories, setCategories] = useState<string[]>([]);
   const [selectedMonth, setSelectedMonth] = useState((new Date().getMonth() + 1).toString());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
+  const [selectedSemester, setSelectedSemester] = useState<'6' | '12'>('6'); // Add separate state for semester
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [reportToDelete, setReportToDelete] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -43,6 +44,7 @@ export default function InputPage() {
   const [dlSemBound, setDlSemBound] = useState<'6' | '12'>('6'); // 6 = First (Jan–Jun), 12 = Second (Jul–Dec)
   // CHANGES ENDS HERE
 
+  const [scrollPosition, setScrollPosition] = useState(0);
   const currentDate = new Date();
   const currentMonth = currentDate.getMonth() + 1;
   const currentYear = currentDate.getFullYear();
@@ -78,6 +80,43 @@ export default function InputPage() {
       };
     }
   }, [user]);
+
+  // Prevent scroll to top when modals open
+  useEffect(() => {
+    const hasModal = viewReport || editReport || showMonthlySummary || showYearlySummary || showSemestralSummary || showDeleteModal || downloadType;
+    
+    if (hasModal) {
+      // Save current scroll position
+      const currentScroll = window.pageYOffset || document.documentElement.scrollTop;
+      setScrollPosition(currentScroll);
+      
+      // Lock scroll
+      document.body.style.overflow = 'hidden';
+      document.body.style.position = 'fixed';
+      document.body.style.top = `-${currentScroll}px`;
+      document.body.style.left = '0';
+      document.body.style.right = '0';
+    } else {
+      // Restore scroll
+      document.body.style.overflow = '';
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.left = '';
+      document.body.style.right = '';
+      
+      // Restore scroll position
+      window.scrollTo(0, scrollPosition);
+    }
+    
+    // Cleanup on unmount
+    return () => {
+      document.body.style.overflow = '';
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.left = '';
+      document.body.style.right = '';
+    };
+  }, [viewReport, editReport, showMonthlySummary, showYearlySummary, showSemestralSummary, showDeleteModal, downloadType, scrollPosition]);
 
   async function fetchCategories(role: string) {
     const toastId = toast.loading('Fetching categories...', { duration: 3000 });
@@ -341,11 +380,13 @@ export default function InputPage() {
     setShowSemestralSummary(false);
   }
   function viewSemestralSummary() {
+    // Set semester based on current month
+    const currentMonth = new Date().getMonth() + 1;
+    setSelectedSemester(currentMonth <= 6 ? '6' : '12');
     setShowSemestralSummary(true);
     setShowMonthlySummary(false);
     setShowYearlySummary(false);
   }
-
   const currentMonthReports = reports.filter((report) => {
     if (!report.created_at) return false;
     const reportDate = new Date(report.created_at);
@@ -370,10 +411,10 @@ export default function InputPage() {
   const semestralReports = reports.filter((report) => {
     if (!report.created_at) return false;
     const reportDate = new Date(report.created_at);
-    const semester = parseInt(selectedMonth) <= 6 ? 'First' : 'Second';
+    const isFirstSemester = selectedSemester === '6';
     return (
       reportDate.getFullYear() === parseInt(selectedYear) &&
-      ((semester === 'First' && reportDate.getMonth() + 1 <= 6) || (semester === 'Second' && reportDate.getMonth() + 1 > 6))
+      (isFirstSemester ? reportDate.getMonth() + 1 <= 6 : reportDate.getMonth() + 1 > 6)
     );
   });
 
@@ -803,7 +844,7 @@ export default function InputPage() {
 
         {viewReport && (
           // CHANGES START HERE — blurred backdrop instead of black
-          <div className="fixed inset-0 bg-white/30 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4">
+          <div className="fixed inset-0 bg-white/30 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 z-50">
             <div className="bg-white p-2 sm:p-3 md:p-4 rounded-lg shadow-lg w-full max-w-sm sm:max-w-md max-h-[90vh] overflow-y-auto">
               {/* CHANGES ENDS HERE */}
               <h2 className="text-sm sm:text-base md:text-lg font-bold text-[#003087] mb-2 sm:mb-3 font-['Poppins']">
@@ -836,7 +877,7 @@ export default function InputPage() {
         )}
 
         {editReport && (
-          <div className="fixed inset-0 bg-white/30 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4">
+          <div className="fixed inset-0 bg-white/30 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 z-50">
             <div className="bg-white p-2 sm:p-3 md:p-4 rounded-lg shadow-lg w-full max-w-sm sm:max-w-md max-h-[90vh] overflow-y-auto">
               <h2 className="text-sm sm:text-base md:text-lg font-bold text-[#003087] mb-2 sm:mb-3 font-['Poppins']">
                 Edit Report
@@ -929,7 +970,7 @@ export default function InputPage() {
         )}
 
         {(showMonthlySummary || showYearlySummary || showSemestralSummary) && (
-          <div className="fixed inset-0 bg-white/30 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4">
+          <div className="fixed inset-0 bg-white/30 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 z-50">
             <div className="bg-white p-2 sm:p-3 md:p-4 rounded-lg shadow-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto">
               <h2 className="text-sm sm:text-base md:text-lg font-bold text-[#003087] font-['Poppins'] mb-2 sm:mb-3">
                 {showMonthlySummary ? 'Monthly Summary' : showSemestralSummary ? 'Semestral Summary' : 'Yearly Summary'}
@@ -963,8 +1004,8 @@ export default function InputPage() {
               {showSemestralSummary && (
                 <div className="mb-2 sm:mb-3 flex flex-col sm:flex-row gap-2 sm:gap-3">
                   <select
-                    value={selectedMonth}
-                    onChange={(e) => setSelectedMonth(e.target.value)}
+                    value={selectedSemester}
+                    onChange={(e) => setSelectedSemester(e.target.value as '6' | '12')}
                     className="w-full p-1 sm:p-2 border rounded-md bg-white text-[#111827]  focus:outline-none focus:ring-2 focus:ring-[#003087] text-xs sm:text-sm"
                   >
                     <option value="6">First Semester (Jan-Jun)</option>
@@ -1069,7 +1110,7 @@ export default function InputPage() {
         )}
 
         {showDeleteModal && (
-          <div className="fixed inset-0 bg-white/30 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 z-50">
+          <div className="fixed inset-0 bg-white/30 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 z-50" onClick={(e) => e.stopPropagation()}>
             <div className="bg-white p-2 sm:p-3 md:p-4 rounded-lg shadow-lg w-full max-w-sm sm:max-w-md max-h-[90vh] overflow-y-auto">
               <h2 className="text-sm sm:text-base md:text-lg font-bold text-[#003087] mb-2 sm:mb-3 font-['Poppins']">
                 Confirm Deletion
@@ -1103,7 +1144,7 @@ export default function InputPage() {
 
         {/* CHANGES START HERE — download modals with blurred background */}
         {downloadType && (
-          <div className="fixed inset-0 bg-white/30 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 z-[9999]">
+          <div className="fixed inset-0 bg-white/30 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 z-[9999]" onClick={(e) => e.stopPropagation()}>
             <div className="bg-white p-3 sm:p-4 rounded-lg shadow-lg border border-gray-200 w-full max-w-sm sm:max-w-md">
               <h3 className="text-sm sm:text-base md:text-lg font-bold text-[#003087] mb-3">
                 {downloadType === 'monthly' && 'Download Monthly Report'}
