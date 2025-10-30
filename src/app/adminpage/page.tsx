@@ -408,16 +408,15 @@ export default function AdminPage() {
   }
 
 async function fetchYearlyReports() {
-  const y = Number(new Date().getFullYear());           // or Number(currentYear)
-  const start = new Date(Date.UTC(y, 0, 1, 0, 0, 0));   // 01 Jan 00:00:00 UTC
-  const next  = new Date(Date.UTC(y + 1, 0, 1, 0, 0, 0)); // 01 Jan next year
-
+  const y = Number(currentYear);
+  const start = new Date(Date.UTC(y, 0, 1, 0, 0, 0));
+  const end = new Date(Date.UTC(y, 11, 31, 23, 59, 59));
   const { data, error } = await supabase
     .from("monthly_reports1")
     .select("id, useriud, type_of_record, period_covered, no_of_pages, created_at, users2(role)")
     .gte("created_at", start.toISOString())
-    .lt("created_at", next.toISOString());   // half-open; no missing last-day rows
-
+    .lte("created_at", end.toISOString());
+    
   if (error) {
     toast.error("Error retrieving yearly reports: " + error.message);
     return;
@@ -568,49 +567,57 @@ async function fetchYearlyReports() {
   }
 
   /* -------------------------- DOWNLOADS (deduped) -------------------------- */
-  function downloadYearlyReport() {
-    const worksheet: XLSX.WorkSheet = XLSX.utils.aoa_to_sheet([]);
-
-    XLSX.utils.sheet_add_aoa(worksheet, [["Civil Service Commission Regional Office VI"]], { origin: "B1" });
-    XLSX.utils.sheet_add_aoa(worksheet, [["DIGITIZATION OF RECORDS"]], { origin: "B2" });
-    XLSX.utils.sheet_add_aoa(worksheet, [[`For the Year ${currentYear}`]], { origin: "B3" });
-    XLSX.utils.sheet_add_aoa(worksheet, [["Target: 100% of Identified Records"]], { origin: "B4" });
-
-    worksheet["!merges"] = [
-      { s: { r: 0, c: 1 }, e: { r: 0, c: 2 } },
-      { s: { r: 1, c: 1 }, e: { r: 1, c: 2 } },
-      { s: { r: 2, c: 1 }, e: { r: 2, c: 2 } },
-      { s: { r: 3, c: 1 }, e: { r: 3, c: 2 } },
-    ];
-
-    applyStyles(worksheet, 0, 3, 3, true, true);
-
-    let currentRow: number = 6;
-    let totalPagesOverall: number = 0;
-    const headers: string[] = ["Type of Record", "Period Covered", "No. of Pages"];
-    XLSX.utils.sheet_add_aoa(worksheet, [headers], { origin: "A" + currentRow });
+function downloadYearlyReport() {
+  const worksheet: XLSX.WorkSheet = XLSX.utils.aoa_to_sheet([]);
+  XLSX.utils.sheet_add_aoa(worksheet, [["Civil Service Commission Regional Office VI"]], { origin: "B1" });
+  XLSX.utils.sheet_add_aoa(worksheet, [["DIGITIZATION OF RECORDS"]], { origin: "B2" });
+  XLSX.utils.sheet_add_aoa(worksheet, [[`For the Year ${currentYear}`]], { origin: "B3" });
+  XLSX.utils.sheet_add_aoa(worksheet, [["Target: 100% of Identified Records"]], { origin: "B4" });
+  worksheet["!merges"] = [
+    { s: { r: 0, c: 1 }, e: { r: 0, c: 2 } },
+    { s: { r: 1, c: 1 }, e: { r: 1, c: 2 } },
+    { s: { r: 2, c: 1 }, e: { r: 2, c: 2 } },
+    { s: { r: 3, c: 1 }, e: { r: 3, c: 2 } },
+  ];
+  applyStyles(worksheet, 0, 3, 3, true, true);
+  let currentRow: number = 6;
+  let totalPagesOverall: number = 0;
+  const headers: string[] = ["Type of Record", "Period Covered", "No. of Pages"];
+  XLSX.utils.sheet_add_aoa(worksheet, [headers], { origin: "A" + currentRow });
+  applyStyles(worksheet, currentRow - 1, currentRow - 1, headers.length, true);
+  currentRow++;
+  const groupedReports = groupAndSum(
+    yearlyReports
+      .filter((r) => r.role !== "ADMIN")
+      .flatMap((r) => {
+        const periods = parsePeriods(r.period_covered);
+        const safe = periods.length ? periods : [""];
+        return safe.map(p => ({ type: r.type_of_record, period: p, pages: r.no_of_pages || 0 }));
+      })
+  );
+  
+  // Track category totals
+// Track category totals
+  const categoryTotals: Record<string, number> = {};
+  
+  Object.keys(groupedReports).forEach((type) => {
+    let categoryTotal = 0;
+    groupedReports[type].forEach((entry, idx) => {
+      const row = [idx === 0 ? type : "", entry.period, entry.pages];
+      XLSX.utils.sheet_add_aoa(worksheet, [row], { origin: "A" + currentRow });
+      applyStyles(worksheet, currentRow - 1, currentRow - 1, headers.length, false);
+      currentRow++;
+      totalPagesOverall += entry.pages;
+      categoryTotal += entry.pages;
+    });
+    categoryTotals[type] = categoryTotal;
+    
+    // Add category subtotal row
+    const subtotalRow = ["", `Subtotal for ${type}`, categoryTotal];
+    XLSX.utils.sheet_add_aoa(worksheet, [subtotalRow], { origin: "A" + currentRow });
     applyStyles(worksheet, currentRow - 1, currentRow - 1, headers.length, true);
     currentRow++;
-
-    const groupedReports = groupAndSum(
-      yearlyReports
-        .filter((r) => r.role !== "ADMIN")
-        .flatMap((r) => {
-          const periods = parsePeriods(r.period_covered);
-          const safe = periods.length ? periods : [""];
-          return safe.map(p => ({ type: r.type_of_record, period: p, pages: r.no_of_pages || 0 }));
-
-        })
-    );
-
-    Object.keys(groupedReports).forEach((type) => {
-      groupedReports[type].forEach((entry, idx) => {
-        const row = [idx === 0 ? type : "", entry.period, entry.pages];
-        XLSX.utils.sheet_add_aoa(worksheet, [row], { origin: "A" + currentRow });
-        currentRow++;
-        totalPagesOverall += entry.pages;
-      });
-    });
+  });
 
     applyStyles(worksheet, 6, currentRow - 1, headers.length);
     const totalRow = ["TOTAL NO. OF PAGES", "", totalPagesOverall];
@@ -640,15 +647,14 @@ async function fetchYearlyReports() {
     XLSX.writeFile(workbook, `Year_${currentYear}_Report.xlsx`);
   }
 
-  function downloadMonthlyReport() {
-    if (!selectedMonth || !selectedYear) {
-      toast.error("Please select both a month and a year to download the report.");
-      return;
-    }
-
-    const year = selectedYear;
-    const month = selectedMonth;
-    const monthName = new Date(`${year}-${month}-01`).toLocaleString("default", { month: "long" });
+function downloadMonthlyReport() {
+  if (!selectedMonth || !selectedYear) {
+    toast.error("Please select both a month and a year to download the report.");
+    return;
+  }
+  const year = selectedYear;
+  const month = selectedMonth;
+  const monthName = new Date(`${year}-${month}-01`).toLocaleString("default", { month: "long" });
     const filteredReports = reports.filter((r) => {
       const d = new Date(r.created_at);
       return d.getFullYear() === parseInt(year) && d.getMonth() + 1 === parseInt(month) && r.role !== "ADMIN";
@@ -680,23 +686,34 @@ async function fetchYearlyReports() {
     applyStyles(worksheet, currentRow - 1, currentRow - 1, headers.length, true);
     currentRow++;
 
-    const groupedReports = groupAndSum(
-      filteredReports.flatMap((r) => {
-        const periods = parsePeriods(r.period_covered);
-        const safe = periods.length ? periods : [""];
-        return safe.map(p => ({ type: r.type_of_record, period: p, pages: r.no_of_pages || 0 }));
-
-      })
-    );
-
-    Object.keys(groupedReports).forEach((type) => {
-      groupedReports[type].forEach((entry, idx) => {
-        const row = [idx === 0 ? type : "", entry.period, entry.pages];
-        XLSX.utils.sheet_add_aoa(worksheet, [row], { origin: "A" + currentRow });
-        currentRow++;
-        totalPages += entry.pages;
-      });
+const groupedReports = groupAndSum(
+    filteredReports.flatMap((r) => {
+      const periods = parsePeriods(r.period_covered);
+      const safe = periods.length ? periods : [""];
+      return safe.map(p => ({ type: r.type_of_record, period: p, pages: r.no_of_pages || 0 }));
+    })
+  );
+  
+const categoryTotals: Record<string, number> = {};
+  
+  Object.keys(groupedReports).forEach((type) => {
+    let categoryTotal = 0;
+    groupedReports[type].forEach((entry, idx) => {
+      const row = [idx === 0 ? type : "", entry.period, entry.pages];
+      XLSX.utils.sheet_add_aoa(worksheet, [row], { origin: "A" + currentRow });
+      applyStyles(worksheet, currentRow - 1, currentRow - 1, headers.length, false);
+      currentRow++;
+      totalPages += entry.pages;
+      categoryTotal += entry.pages;
     });
+    categoryTotals[type] = categoryTotal;
+    
+    // Add category subtotal row
+    const subtotalRow = ["", `Subtotal for ${type}`, categoryTotal];
+    XLSX.utils.sheet_add_aoa(worksheet, [subtotalRow], { origin: "A" + currentRow });
+    applyStyles(worksheet, currentRow - 1, currentRow - 1, headers.length, true);
+    currentRow++;
+  });
 
     applyStyles(worksheet, 6, currentRow - 1, headers.length);
     const totalRow = ["TOTAL NO. OF PAGES", "", totalPages];
@@ -783,25 +800,34 @@ async function fetchYearlyReports() {
     currentRow++;
 
     let totalPages: number = 0;
-    const groupedReports = groupAndSum(
-      filteredReports.flatMap((r) => {
-        const periods = parsePeriods(r.period_covered);
-        const safe = periods.length ? periods : [""];
-        return safe.map(p => ({ type: r.type_of_record, period: p, pages: r.no_of_pages || 0 }));
-
-      })
-    );
-
-    Object.keys(groupedReports).forEach((type) => {
-      groupedReports[type].forEach((entry, idx) => {
-        const row = [idx === 0 ? type : "", entry.period, entry.pages];
-        XLSX.utils.sheet_add_aoa(worksheet, [row], { origin: "A" + currentRow });
-        currentRow++;
-        totalPages += entry.pages;
-      });
+const groupedReports = groupAndSum(
+    filteredReports.flatMap((r) => {
+      const periods = parsePeriods(r.period_covered);
+      const safe = periods.length ? periods : [""];
+      return safe.map(p => ({ type: r.type_of_record, period: p, pages: r.no_of_pages || 0 }));
+    })
+  );
+  
+  const categoryTotals: Record<string, number> = {};
+  
+  Object.keys(groupedReports).forEach((type) => {
+    let categoryTotal = 0;
+    groupedReports[type].forEach((entry, idx) => {
+      const row = [idx === 0 ? type : "", entry.period, entry.pages];
+      XLSX.utils.sheet_add_aoa(worksheet, [row], { origin: "A" + currentRow });
+      applyStyles(worksheet, currentRow - 1, currentRow - 1, headers.length, false);
+      currentRow++;
+      totalPages += entry.pages;
+      categoryTotal += entry.pages;
     });
-
-    applyStyles(worksheet, 6, currentRow - 1, headers.length);
+    categoryTotals[type] = categoryTotal;
+    
+    // Add category subtotal row
+    const subtotalRow = ["", `Subtotal for ${type}`, categoryTotal];
+    XLSX.utils.sheet_add_aoa(worksheet, [subtotalRow], { origin: "A" + currentRow });
+    applyStyles(worksheet, currentRow - 1, currentRow - 1, headers.length, true);
+    currentRow++;
+  });
 
     const totalRow = ["TOTAL NO. OF PAGES", "", totalPages];
     XLSX.utils.sheet_add_aoa(worksheet, [totalRow], { origin: "A" + currentRow });
@@ -955,7 +981,7 @@ async function fetchYearlyReports() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F5F6F5] p-2 sm:p-4 md:p-6 relative">
+    <div className="min-h-screen bg-[#F5F6F5] p-2 sm:p-4 md:p-6 relative pb-[env(safe-area-inset-bottom)]">
       <Toaster position="top-right" />
 
       {/* Desktop Floating Navigation Menu */}
@@ -1648,114 +1674,210 @@ async function fetchYearlyReports() {
           </div>
         )}
 
-        {showYearlyModal && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4">
-            <div className="bg-white p-3 sm:p-4 md:p-6 rounded-lg shadow-lg w-full max-w-2xl sm:max-w-4xl max-h-[90vh] overflow-y-auto">
-              <div className="flex justify-between items-center mb-3 sm:mb-4">
-                <h2 className="text-base sm:text-lg md:text-xl font-semibold text-[#003087] font-['Poppins']">
-                  Yearly Report {currentYear}
-                </h2>
-                <button
-                  onClick={() => setShowYearlyModal(false)}
-                  className={`${ACTION_BTN} ${ICON_BTN_DANGER}`}
-                  aria-label="Close"
-                  title="Close"
-                >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6L6 18M6 6l12 12"/></svg>
-                </button>
-              </div>
-              <div className="overflow-x-auto max-h-[60vh]">
-                <table className="w-full border-collapse table-auto text-xs sm:text-sm">
-                  <thead>
-                    <tr className="bg-[#003087] text-white sticky top-0">
-                      <th className={`${TH_BASE} min-w-[150px]`}>Type of Record</th>
-                      <th className={`${TH_BASE} min-w-[120px]`}>Period Covered</th>
-                      <th className={`${TH_BASE} w-[100px]`}>No. of Pages</th>
+ {showYearlyModal && (
+  <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4">
+    <div className="bg-white p-3 sm:p-4 md:p-6 rounded-lg shadow-lg w-full max-w-2xl sm:max-w-4xl max-h-[90vh] overflow-y-auto">
+      <div className="flex justify-between items-center mb-3 sm:mb-4">
+        <h2 className="text-base sm:text-lg md:text-xl font-semibold text-[#003087] font-['Poppins']">
+          Yearly Report {currentYear}
+        </h2>
+        <button
+          onClick={() => setShowYearlyModal(false)}
+          className={`${ACTION_BTN} ${ICON_BTN_DANGER}`}
+          aria-label="Close"
+          title="Close"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div className="overflow-x-auto max-h-[60vh]">
+        <table className="w-full border-collapse table-auto text-xs sm:text-sm">
+          <thead>
+            <tr className="bg-[#003087] text-white sticky top-0">
+              <th className={`${TH_BASE} min-w-[150px]`}>Type of Record</th>
+              <th className={`${TH_BASE} min-w-[120px]`}>Period Covered</th>
+              <th className={`${TH_BASE} w-[100px]`}>No. of Pages</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(() => {
+              const grouped = groupAndSum(
+                yearlyReports
+                  .filter((r) => r.role !== "ADMIN")
+                  .flatMap((r) => {
+                    const periods = parsePeriods(r.period_covered);
+                    const safe = periods.length ? periods : [""];
+                    return safe.map(p => ({ type: r.type_of_record, period: p, pages: r.no_of_pages || 0 }));
+                  })
+              );
+              let totalPages = 0;
+              const rows: React.ReactNode[] = [];
+              
+              Object.keys(grouped).forEach((type) => {
+                let categoryTotal = 0;
+                grouped[type].forEach((entry, idx) => {
+                  totalPages += entry.pages;
+                  categoryTotal += entry.pages;
+                  rows.push(
+                    <tr key={`${type}-${entry.period}-${idx}`} className="border-b hover:bg-[#F5F6F5]">
+                      <td className="p-1 sm:p-2 text-center text-[#003087] min-w-[150px] whitespace-normal">
+                        {idx === 0 ? type : ""}
+                      </td>
+                      <td className="p-1 sm:p-2 text-center text-[#003087]" title={entry.period}>
+                        <span className="inline-block max-w-[26ch] truncate">{entry.period}</span>
+                      </td>
+                      <td className="p-1 sm:p-2 text-center text-[#003087] whitespace-nowrap">
+                        {entry.pages}
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {(() => {
-                      const grouped = groupAndSum(
-                        yearlyReports
-                          .filter((r) => r.role !== "ADMIN")
-                          .flatMap((r) => {
-                            const periods = parsePeriods(r.period_covered);
-                            const safe = periods.length ? periods : [""];
-                            return safe.map(p => ({ type: r.type_of_record, period: p, pages: r.no_of_pages || 0 }));
+                  );
+                });
+                
+                // Add category subtotal row
+                rows.push(
+                  <tr key={`${type}-subtotal`} className="bg-gray-100 font-semibold border-b-2">
+                    <td colSpan={2} className="p-1 sm:p-2 text-right text-[#003087]">
+                      Subtotal for {type}
+                    </td>
+                    <td className="p-1 sm:p-2 text-center text-[#003087] whitespace-nowrap">
+                      {categoryTotal}
+                    </td>
+                  </tr>
+                );
+              });
+              
+              rows.push(
+                <tr key="total" className="font-bold bg-[#003087] text-white">
+                  <td colSpan={2} className="p-1 sm:p-2 text-right">Total No. of Pages</td>
+                  <td className="p-1 sm:p-2 text-center whitespace-nowrap">{totalPages}</td>
+                </tr>
+              );
+              return rows;
+            })()}
+          </tbody>
+        </table>
+      </div>
+      <button
+        onClick={() => setShowYearlyModal(false)}
+        className="mt-3 sm:mt-4 w-full py-1 sm:py-2 bg-[#003087] text-white rounded hover:bg-[#002060] transition-colors font-medium text-xs sm:text-sm"
+      >
+        Close
+      </button>
+    </div>
+  </div>
+)}
 
-                          })
-                      );
-                      let totalPages = 0;
-                      const rows: React.ReactNode[] = [];
+{showMonthlySummary && (
+  <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+    <div className="bg-white p-3 sm:p-4 md:p-6 rounded-lg shadow-lg w-full max-w-[95vw] sm:max-w-2xl md:max-w-3xl lg:max-w-4xl my-4">
+      <div className="flex justify-between items-center mb-3 sm:mb-4">
+        <h2 className="text-xs sm:text-sm md:text-base lg:text-lg font-semibold text-[#003087] font-['Poppins']">
+          Monthly Summary - {summaryRole}
+        </h2>
+        <button
+          onClick={() => setShowMonthlySummary(false)}
+          className={`${ACTION_BTN} ${ICON_BTN_DANGER}`}
+          aria-label="Close"
+          title="Close"
+        >
+          <svg width={window.innerWidth < 640 ? "18" : "20"} height={window.innerWidth < 640 ? "18" : "20"} viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path d="M18 6L6 18M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
 
-                      Object.keys(grouped).forEach((type) => {
-                        grouped[type].forEach((entry, idx) => {
-                          totalPages += entry.pages;
-                          rows.push(
-                            <tr key={`${type}-${entry.period}-${idx}`} className="border-b hover:bg-[#F5F6F5]">
-                              <td className="p-1 sm:p-2 text-center text-[#003087] min-w-[150px] whitespace-normal">
-                                {idx === 0 ? type : ""}
-                              </td>
-                              <td className="p-1 sm:p-2 text-center text-[#003087]" title={entry.period}>
-                                <span className="inline-block max-w-[26ch] truncate">{entry.period}</span>
-                              </td>
-                              <td className="p-1 sm:p-2 text-center text-[#003087] whitespace-nowrap">
-                                {entry.pages}
-                              </td>
-                            </tr>
-                          );
-                        });
-                      });
+      {/* Chart */}
+      <div className="mb-4 sm:mb-6 h-48 sm:h-64 md:h-80">
+        <Bar data={monthlyChartData()} options={monthlyChartOptions} />
+      </div>
 
-                      rows.push(
-                        <tr key="total" className="font-bold">
-                          <td colSpan={2} className="p-1 sm:p-2 text-right text-[#003087]">Total No. of Pages</td>
-                          <td className="p-1 sm:p-2 text-center text-[#003087] whitespace-nowrap">{totalPages}</td>
-                        </tr>
-                      );
-                      return rows;
-                    })()}
-                  </tbody>
-                </table>
-              </div>
-              <button
-                onClick={() => setShowYearlyModal(false)}
-                className="mt-3 sm:mt-4 w-full py-1 sm:py-2 bg-[#003087] text-white rounded hover:bg-[#002060] transition-colors font-medium text-xs sm:text-sm"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        )}
+      {/* NEW: Monthly Reports Table */}
+      <div className="mb-4 sm:mb-6">
+        <h3 className="text-xs sm:text-sm md:text-base font-semibold text-[#003087] mb-2 sm:mb-3">
+          Report Details for {new Date(`${summaryYear}-${summaryMonth}-01`).toLocaleString("default", { month: "long" })} {summaryYear}
+        </h3>
+        <div className="overflow-x-auto max-h-[50vh] sm:max-h-60 md:max-h-72 -mx-3 sm:mx-0">
+          <table className="w-full border-collapse text-[8px] xs:text-[9px] sm:text-xs md:text-sm min-w-[500px]">
+              <thead>
+                <tr className="bg-[#003087] text-white sticky top-0 z-10">
+                  <th className="p-0.5 sm:p-1 md:p-2 text-center w-[25px] sm:w-[35px] md:w-[40px]">No.</th>
+                  <th className="p-0.5 sm:p-1 md:p-2 text-left min-w-[90px] sm:min-w-[120px] md:min-w-[140px]">Type</th>
+                  <th className="p-0.5 sm:p-1 md:p-2 text-left min-w-[70px] sm:min-w-[90px] md:min-w-[110px]">Period</th>
+                  <th className="p-0.5 sm:p-1 md:p-2 text-center w-[45px] sm:w-[60px] md:w-[80px]">Pages</th>
+                  <th className="p-0.5 sm:p-1 md:p-2 text-center w-[55px] sm:w-[70px] md:w-[90px]">Date</th>
+                </tr>
+              </thead>
+            <tbody>
+              {(() => {
+                const filteredReports = reports.filter((r) => {
+                  const d = new Date(r.created_at);
+                  return (
+                    r.role.toUpperCase() === summaryRole.toUpperCase() &&
+                    d.getFullYear() === parseInt(summaryYear) &&
+                    d.getMonth() + 1 === parseInt(summaryMonth)
+                  );
+                });
 
-        {showMonthlySummary && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4">
-            <div className="bg-white p-3 sm:p-4 md:p-6 rounded-lg shadow-lg w-full max-w-md sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-              <div className="flex justify-between items-center mb-3 sm:mb-4">
-                <h2 className="text-base sm:text-lg md:text-xl font-semibold text-[#003087] font-['Poppins']">
-                  Monthly Summary
-                </h2>
-                <button
-                  onClick={() => setShowMonthlySummary(false)}
-                  className={`${ACTION_BTN} ${ICON_BTN_DANGER}`}
-                  aria-label="Close"
-                  title="Close"
-                >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6L6 18M6 6l12 12"/></svg>
-                </button>
-              </div>
-              <div className="mb-4 h-64 sm:h-80">
-                <Bar data={monthlyChartData()} options={monthlyChartOptions} />
-              </div>
-              <button
-                onClick={() => setShowMonthlySummary(false)}
-                className="w-full py-1 sm:p-2 bg-[#003087] text-white rounded hover:bg-[#002060] transition-colors font-medium text-xs sm:text-sm"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        )}
+                if (filteredReports.length === 0) {
+                  return (
+                    <tr>
+                      <td colSpan={5} className="p-2 sm:p-3 text-center text-gray-500 text-[10px] sm:text-xs">
+                        No reports found for this period.
+                      </td>
+                    </tr>
+                  );
+                }
+
+                const totalPages = filteredReports.reduce((sum, r) => sum + r.no_of_pages, 0);
+
+                return (
+                  <>
+                    {filteredReports.map((r, index) => (
+                      <tr key={r.id} className="border-b hover:bg-[#F5F6F5]">
+                        <td className="p-0.5 sm:p-1 md:p-2 text-center text-[#003087]">{index + 1}</td>
+                        <td className="p-0.5 sm:p-1 md:p-2 text-[#003087]" title={r.type_of_record}>
+                          <div className="max-w-[80px] sm:max-w-[110px] md:max-w-[130px] truncate">
+                            {r.type_of_record}
+                          </div>
+                        </td>
+                        <td className="p-0.5 sm:p-1 md:p-2 text-[#003087]" title={r.period_covered}>
+                          <div className="max-w-[60px] sm:max-w-[80px] md:max-w-[100px] truncate">
+                            {r.period_covered}
+                          </div>
+                        </td>
+                        <td className="p-0.5 sm:p-1 md:p-2 text-center text-[#003087]">{r.no_of_pages}</td>
+                        <td className="p-0.5 sm:p-1 md:p-2 text-center text-[#003087] text-[7px] xs:text-[8px] sm:text-[9px] md:text-[10px]">
+                          {new Date(r.created_at).toLocaleDateString('en-US', { 
+                            month: '2-digit', 
+                            day: '2-digit' 
+                          })}
+                        </td>
+                      </tr>
+                    ))}
+                    <tr className="font-bold bg-gray-100">
+                      <td colSpan={3} className="p-1 sm:p-2 text-right text-[#003087]">
+                        Total No. of Pages
+                      </td>
+                      <td className="p-1 sm:p-2 text-center text-[#003087]">{totalPages}</td>
+                      <td />
+                    </tr>
+                  </>
+                );
+              })()}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <button
+        onClick={() => setShowMonthlySummary(false)}
+        className="w-full py-2 sm:py-2.5 bg-[#003087] text-white rounded hover:bg-[#002060] transition-colors font-medium text-xs sm:text-sm"
+      >
+        Close
+      </button>
+    </div>
+  </div>
+)}
 
         {showDeleteModal && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4">
